@@ -141,7 +141,7 @@
 - [x] 10.2 全仓库 `grep -rn "ShouldUpdate" --include="*.go" .` 应为空。
 - [x] 10.3 `go test ./...` 全部通过。
 - [ ] 10.4 验证 4 个 OpenSpec Change 全部进入 archive 状态后,`openspec/specs/` 含 `notifications`、`image-update-pipeline`、`persistence`、`web-dashboard`、`image-policy`、`helm-chart-config`、`registry-client`、`image-poll-watcher`、`provider-update-decision` 共 9 个 capability。
-   - Pending archive workflow: active changes are marked complete/in-progress, not archived, and `openspec/specs/` is currently empty.
+   - Pending final archive workflow: the first three Changes are archived and `openspec/specs/` currently contains the first 6 capabilities. This Change is still active, so `registry-client`, `image-poll-watcher`, and `provider-update-decision` are not yet in main specs.
 
 ## 11. OpenSpec 工件验证
 
