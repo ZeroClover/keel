@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/provider"
 	"github.com/keel-hq/keel/types"
 
@@ -44,21 +43,16 @@ func NewTestingServer(fp provider.Provider) (*TriggerServer, func()) {
 	store, teardown := NewTestingUtils()
 	// defer teardown()
 
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
 	authenticator := auth.New(&auth.Opts{
 		Username: "user-1",
 		Password: "secret",
 	})
 
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 	srv := NewTriggerServer(&Opts{
-		Providers:       providers,
-		ApprovalManager: am,
-		Authenticator:   authenticator,
-		Store:           store,
+		Providers:     providers,
+		Authenticator: authenticator,
+		Store:         store,
 	})
 	srv.registerRoutes(srv.router)
 
@@ -108,6 +102,26 @@ func TestNativeWebhookHandler(t *testing.T) {
 
 	if len(fp.submitted) != 1 {
 		t.Fatalf("unexpected number of events submitted: %d", len(fp.submitted))
+	}
+}
+
+func TestApprovalRoutesNotRegistered(t *testing.T) {
+	fp := &fakeProvider{}
+	srv, teardown := NewTestingServer(fp)
+	defer teardown()
+
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut} {
+		req, err := http.NewRequest(method, "/v1/approvals", nil)
+		if err != nil {
+			t.Fatalf("failed to create req: %s", err)
+		}
+		req.SetBasicAuth("user-1", "secret")
+
+		rec := httptest.NewRecorder()
+		srv.router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s /v1/approvals: expected 404, got %d", method, rec.Code)
+		}
 	}
 }
 

@@ -31,8 +31,14 @@ func New(opts Opts) (*SQLStore, error) {
 		return nil, err
 	}
 
+	if err := db.Exec("DROP TABLE IF EXISTS approvals").Error; err != nil {
+		log.WithFields(log.Fields{
+			"error": err,
+		}).Error("database legacy approvals table cleanup failed")
+		return nil, err
+	}
+
 	err = db.AutoMigrate(
-		&types.Approval{},
 		&types.AuditLog{},
 	).Error
 	if err != nil {

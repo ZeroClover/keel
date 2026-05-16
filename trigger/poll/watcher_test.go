@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/keel-hq/keel/approvals"
 	// "github.com/keel-hq/keel/cache/memory"
 	"github.com/keel-hq/keel/extension/credentialshelper"
 	"github.com/keel-hq/keel/internal/policy"
@@ -77,13 +76,7 @@ func (p *fakeProvider) TrackedImages() ([]*types.TrackedImage, error) {
 func TestWatchTagJob(t *testing.T) {
 
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
@@ -139,13 +132,7 @@ func TestWatchTagJobForce(t *testing.T) {
 			},
 		},
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
@@ -172,13 +159,7 @@ func TestWatchTagJobForce(t *testing.T) {
 func TestWatchTagJobLatest(t *testing.T) {
 
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
@@ -231,13 +212,7 @@ func TestWatchAllTagsJob(t *testing.T) {
 			},
 		},
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		tagsToReturn: []string{"1.1.2", "1.1.3", "0.9.1"},
@@ -275,13 +250,7 @@ func TestWatchAllTagsJobCurrentLatest(t *testing.T) {
 			},
 		},
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		tagsToReturn: []string{"1.1.2", "1.1.3", "0.9.1"},
@@ -345,13 +314,7 @@ func TestWatchMultipleTags(t *testing.T) {
 			},
 		},
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	// returning some sha
 	frc := &fakeRegistryClient{
@@ -428,13 +391,7 @@ func TestWatchTagJobCheckCredentials(t *testing.T) {
 	defer credentialshelper.UnregisterCredentialsHelper("fake")
 
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
@@ -475,13 +432,7 @@ func TestWatchWithAuthenticationError(t *testing.T) {
 	defer credentialshelper.UnregisterCredentialsHelper("fake")
 
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		digestErrToReturn: errors.New("authentication failed"),
@@ -517,13 +468,7 @@ func TestWatchTagJobLatestECR(t *testing.T) {
 		},
 	}
 
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 	rc := registry.New()
 
 	details := &watchDetails{
@@ -564,13 +509,7 @@ func TestWatchTagJobLatestECR(t *testing.T) {
 
 func TestUnwatchAfterNotTrackedAnymore(t *testing.T) {
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	// returning some sha
 	frc := &fakeRegistryClient{

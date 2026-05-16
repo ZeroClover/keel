@@ -12,11 +12,6 @@ const resources = {
       for (var i = 0; i < resources.length; i++) {
         const keelOpts = {}
 
-        const approvals = resources[i].annotations['keel.sh/approvals']
-        if (approvals) {
-          resources[i]._required_approvals = approvals
-        }
-
         const triggerAnnotation = resources[i].annotations['keel.sh/trigger']
         if (triggerAnnotation) {
           resources[i]._trigger_poll = triggerAnnotation === 'poll'

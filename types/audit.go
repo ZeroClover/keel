@@ -9,20 +9,12 @@ const (
 	AuditActionUpdated = "updated"
 	AuditActionDeleted = "deleted"
 
-	// Approval specific actions
-	AuditActionApprovalApproved = "approved"
-	AuditActionApprovalRejected = "rejected"
-	AuditActionApprovalExpired  = "expired"
-	AuditActionApprovalArchived = "archived"
-
 	// audit specific resource kinds (others are set by
 	// providers, ie: deployment, daemonset, helm chart)
-	AuditResourceKindApproval = "approval"
-	AuditResourceKindWebhook  = "webhook"
+	AuditResourceKindWebhook = "webhook"
 )
 
-// AuditLog - audit logs lets users basic things happening in keel such as
-// deployment updates and approval actions
+// AuditLog - audit logs lets users inspect basic things happening in keel.
 type AuditLog struct {
 	ID        string    `json:"id" gorm:"primary_key;type:varchar(36)"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -34,7 +26,7 @@ type AuditLog struct {
 
 	// create/delete/update
 	Action       string `json:"action"`
-	ResourceKind string `json:"resourceKind"` // approval/deployment/daemonset/statefulset/etc...
+	ResourceKind string `json:"resourceKind"` // deployment/daemonset/statefulset/etc...
 	Identifier   string `json:"identifier"`
 
 	Message     string `json:"message"`
@@ -72,7 +64,5 @@ type AuditLogStatsQuery struct {
 type AuditLogStats struct {
 	Date     string `json:"date"`
 	Webhooks int    `json:"webhooks"`
-	Approved int    `json:"approved"`
-	Rejected int    `json:"rejected"`
 	Updates  int    `json:"updates"`
 }

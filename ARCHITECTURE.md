@@ -58,7 +58,6 @@ Keel is a **Kubernetes deployment automation tool** written in Go. It watches co
 | `types/` | **Domain types** - Core data structures | `types.go` |
 | `internal/policy/` | **Version matching** - Semver, glob, force, regexp | `policy.go`, `semver.go` |
 | `extension/` | **Plugins** - Notifications, credentials helpers | `notification/`, `credentialshelper/` |
-| `approvals/` | **Approval workflow** - Manual approval before updates | `approvals.go` |
 | `registry/` | **Registry client** - Docker registry API | `registry.go` |
 | `secrets/` | **K8s secrets** - Extract registry credentials | `secrets.go` |
 | `ui/` | **Web dashboard** - Vue.js frontend | `src/` |
@@ -147,30 +146,13 @@ Notifications are registered via blank imports in `cmd/keel/main.go`:
 _ "github.com/keel-hq/keel/extension/notification/slack"
 ```
 
-### 5. Approvals
-
-Manual approval workflow before updates proceed:
-
-```go
-// approvals/approvals.go
-type Manager interface {
-    Create(r *types.Approval) error
-    Approve(id, voter string) (*types.Approval, error)
-    Reject(id string) (*types.Approval, error)
-    // ...
-}
-```
-
-Set via `keel.sh/approvals: "2"` annotation to require N approvals.
-
 ## Data Flow
 
 1. **Trigger detects new version** → Creates `types.Event`
 2. **Event submitted to Providers** → `provider.Submit(event)`
 3. **Provider checks policies** → `internal/policy/` evaluates if update allowed
-4. **Approval check** → If approvals required, waits for manual approval
-5. **Deployment updated** → Provider patches K8s resource or Helm release
-6. **Notifications sent** → Slack/webhook/etc. notified of update
+4. **Deployment updated** → Provider patches K8s resource or Helm release
+5. **Notifications sent** → Slack/webhook/etc. notified of update
 
 ## Key Annotations
 
@@ -179,8 +161,6 @@ Set via `keel.sh/approvals: "2"` annotation to require N approvals.
 | `keel.sh/policy` | Update policy | `minor`, `patch`, `force`, `glob:v*` |
 | `keel.sh/trigger` | Trigger type | `poll` (default: webhooks) |
 | `keel.sh/pollSchedule` | Poll frequency | `@every 5m` |
-| `keel.sh/approvals` | Required approvals | `2` |
-| `keel.sh/approvalDeadline` | Approval timeout (hours) | `24` |
 | `keel.sh/notify` | Override notification channel | `#deployments` |
 | `keel.sh/matchTag` | Force tag matching | `true` |
 | `keel.sh/matchPreRelease` | Match pre-release versions | `true` |
@@ -269,7 +249,6 @@ make image
 | Modify K8s update behavior | `provider/kubernetes/` |
 | Add notification channel | `extension/notification/` |
 | Change polling behavior | `trigger/poll/` |
-| Modify approval workflow | `approvals/` |
 | Add registry authentication | `extension/credentialshelper/` |
 | Parse image references | `util/` |
 | HTTP API endpoints | `pkg/http/` |

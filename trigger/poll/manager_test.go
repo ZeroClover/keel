@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/pkg/store/sql"
 
 	// "github.com/keel-hq/keel/cache/memory"
@@ -73,13 +72,7 @@ func TestCheckDeployment(t *testing.T) {
 		},
 	}
 
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	// returning some sha
 	frc := &fakeRegistryClient{
@@ -154,13 +147,7 @@ func TestCheckECRDeployment(t *testing.T) {
 			},
 		},
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 	rc := registry.New()
 
 	watcher := NewRepositoryWatcher(providers, rc)

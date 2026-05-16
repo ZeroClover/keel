@@ -60,17 +60,8 @@ const KeelDigestAnnotation = "keel.sh/digest"
 // default notification channel(-s) per deployment/chart
 const KeelNotificationChanAnnotation = "keel.sh/notify"
 
-// KeelMinimumApprovalsLabel - min approvals
-const KeelMinimumApprovalsLabel = "keel.sh/approvals"
-
 // KeelUpdateTimeAnnotation - update time
 const KeelUpdateTimeAnnotation = "keel.sh/update-time"
-
-// KeelApprovalDeadlineLabel - approval deadline
-const KeelApprovalDeadlineLabel = "keel.sh/approvalDeadline"
-
-// KeelApprovalDeadlineDefault - default deadline in hours
-const KeelApprovalDeadlineDefault = 24
 
 // KeelReleasePage - optional release notes URL passed on with notification
 const KeelReleaseNotesURL = "keel.sh/releaseNotes"
@@ -168,9 +159,8 @@ type TriggerType int
 
 // Available trigger types
 const (
-	TriggerTypeDefault  TriggerType = iota // default policy is to wait for external triggers
-	TriggerTypePoll                        // poll policy sets up watchers for the affected repositories
-	TriggerTypeApproval                    // fulfilled approval requests trigger events
+	TriggerTypeDefault TriggerType = iota // default policy is to wait for external triggers
+	TriggerTypePoll                       // poll policy sets up watchers for the affected repositories
 )
 
 func (t TriggerType) String() string {
@@ -179,8 +169,6 @@ func (t TriggerType) String() string {
 		return "default"
 	case TriggerTypePoll:
 		return "poll"
-	case TriggerTypeApproval:
-		return "approval"
 	default:
 		return "default"
 	}
@@ -254,9 +242,6 @@ const (
 	NotificationReleaseUpdate
 
 	NotificationSystemEvent
-
-	NotificationUpdateApproved
-	NotificationUpdateRejected
 )
 
 func (n Notification) String() string {
@@ -275,10 +260,6 @@ func (n Notification) String() string {
 		return "release update"
 	case NotificationSystemEvent:
 		return "system event"
-	case NotificationUpdateApproved:
-		return "update approved"
-	case NotificationUpdateRejected:
-		return "update rejected "
 	default:
 		return "unknown"
 	}

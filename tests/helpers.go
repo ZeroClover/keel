@@ -108,6 +108,9 @@ func (kc *KeelCmd) Start(ctx context.Context) error {
 
 func (kc *KeelCmd) Stop() error {
 	defer log.Info("keel stopped")
+	if kc.cmd == nil || kc.cmd.Process == nil {
+		return nil
+	}
 	return kc.cmd.Process.Kill()
 }
 

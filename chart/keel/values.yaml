@@ -130,7 +130,7 @@ mail:
     user: ""
     pass: ""
 
-# Basic auth on approvals
+# Basic auth for admin API
 basicauth:
   enabled: false
   user: ""

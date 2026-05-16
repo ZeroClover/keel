@@ -13,7 +13,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/extension/notification"
 	"github.com/keel-hq/keel/internal/k8s"
 	"github.com/keel-hq/keel/internal/policy"
@@ -85,8 +84,6 @@ type Provider struct {
 
 	sender notification.Sender
 
-	approvalManager approvals.Manager
-
 	cache GenericResourceCache
 
 	events chan *types.Event
@@ -94,14 +91,13 @@ type Provider struct {
 }
 
 // NewProvider - create new kubernetes based provider
-func NewProvider(implementer Implementer, sender notification.Sender, approvalManager approvals.Manager, cache GenericResourceCache) (*Provider, error) {
+func NewProvider(implementer Implementer, sender notification.Sender, cache GenericResourceCache) (*Provider, error) {
 	return &Provider{
-		implementer:     implementer,
-		cache:           cache,
-		approvalManager: approvalManager,
-		events:          make(chan *types.Event, 100),
-		stop:            make(chan struct{}),
-		sender:          sender,
+		implementer: implementer,
+		cache:       cache,
+		events:      make(chan *types.Event, 100),
+		stop:        make(chan struct{}),
+		sender:      sender,
 	}, nil
 }
 
@@ -329,9 +325,7 @@ func (p *Provider) processEvent(event *types.Event) (updated []*k8s.GenericResou
 		return
 	}
 
-	approvedPlans := p.checkForApprovals(event, plans)
-
-	return p.updateDeployments(approvedPlans)
+	return p.updateDeployments(plans)
 }
 
 func (p *Provider) updateDeployments(plans []*UpdatePlan) (updated []*k8s.GenericResource, err error) {
@@ -402,16 +396,6 @@ func (p *Provider) updateDeployments(plans []*UpdatePlan) (updated []*k8s.Generi
 			})
 
 			continue
-		}
-
-		err = p.updateComplete(plan)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error":     err,
-				"name":      resource.Name,
-				"kind":      resource.Kind(),
-				"namespace": resource.Namespace,
-			}).Warn("provider.kubernetes: got error while archiving approvals counter after successful update")
 		}
 
 		var msg string

@@ -6,7 +6,6 @@ import (
 	"cloud.google.com/go/pubsub"
 	"golang.org/x/net/context"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/provider"
 
 	"testing"
@@ -22,12 +21,7 @@ func fakeDoneFunc(id string, done bool) {
 func TestCallback(t *testing.T) {
 
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 	sub := &PubsubSubscriber{disableAck: true, providers: providers}
 
 	dataMsg := &Message{Action: "INSERT", Tag: "gcr.io/v2-namespace/hello-world:1.1.1"}
@@ -52,12 +46,7 @@ func TestCallback(t *testing.T) {
 func TestCallbackTagNotSemver(t *testing.T) {
 
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 	sub := &PubsubSubscriber{disableAck: true, providers: providers}
 
 	dataMsg := &Message{Action: "INSERT", Tag: "gcr.io/stemnapp/alpine-website:latest"}
@@ -83,12 +72,7 @@ func TestCallbackTagNotSemver(t *testing.T) {
 func TestCallbackNoTag(t *testing.T) {
 
 	fp := &fakeProvider{}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 	sub := &PubsubSubscriber{disableAck: true, providers: providers}
 
 	dataMsg := &Message{Action: "INSERT", Tag: "gcr.io/stemnapp/alpine-website"}

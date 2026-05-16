@@ -127,7 +127,7 @@ The following table lists has the main configurable parameters (polling, trigger
 | `ingress.labels`                            | Ingress labels                         | `{}`                                                      |
 | `ingress.hosts`                             | Ingress accepted hosts                 | `[]`                                                      |
 | `ingress.tls`                               | Ingress TLS configuration              | `[]`                                                      |
-| `basicauth.enabled`                         | Enable/disable Basic Auth on approvals | `false`                                                   |
+| `basicauth.enabled`                         | Enable/disable Basic Auth for admin API| `false`                                                   |
 | `basicauth.user`                            | Basic Auth username                    |                                                           |
 | `basicauth.password`                        | Basic Auth password                    |                                                           |
 | `dockerRegistry.enabled`                    | Docker registry secret enabled.        | `false`                                                   |

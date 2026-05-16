@@ -7,11 +7,9 @@ import (
 )
 
 type dailyStats struct {
-	Timestamp         int `json:"timestamp"`
-	WebhooksReceived  int `json:"webhooksReceived"`
-	ApprovalsApproved int `json:"approvalsApproved"`
-	ApprovalsRejected int `json:"approvalsRejected"`
-	Updates           int `json:"updates"`
+	Timestamp        int `json:"timestamp"`
+	WebhooksReceived int `json:"webhooksReceived"`
+	Updates          int `json:"updates"`
 }
 
 func (s *TriggerServer) statsHandler(resp http.ResponseWriter, req *http.Request) {

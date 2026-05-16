@@ -21,37 +21,6 @@ const getters = {
     })
     return filtered
   },
-  approvalsPending: state => {
-    var filtered = []
-    state.approvals.approvals.map(function (approval) {
-      if (!approval.rejected && !approval.archived && approval.votesReceived < approval.votesRequired) {
-        filtered.push(approval)
-      }
-    })
-    return filtered
-  },
-  approvalsApprovedCount: state => {
-    var arrayLength = state.approvals.approvals.length
-    const approvals = state.approvals.approvals
-    let count = 0
-    for (var i = 0; i < arrayLength; i++) {
-      if (!approvals[i].rejected && approvals[i].votesReceived >= approvals[i].votesRequired) {
-        count++
-      }
-    }
-    return count
-  },
-  approvalsRejectedCount: state => {
-    var arrayLength = state.approvals.approvals.length
-    const approvals = state.approvals.approvals
-    let count = 0
-    for (var i = 0; i < arrayLength; i++) {
-      if (approvals[i].rejected) {
-        count++
-      }
-    }
-    return count
-  },
   trackedNamespaces: state => {
     const seen = Object.create(null)
     state.tracked.images.forEach(image => {
@@ -78,18 +47,6 @@ const getters = {
       data.push({
         x: stats[i].date,
         y: stats[i].updates
-      })
-    }
-    return data
-  },
-  approvalStats: state => {
-    const data = []
-    var arrayLength = state.stats.stats.length
-    const stats = state.stats.stats
-    for (var i = 0; i < arrayLength; i++) {
-      data.push({
-        x: stats[i].date,
-        y: stats[i].approved
       })
     }
     return data

@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/extension/credentialshelper"
 	"github.com/keel-hq/keel/internal/policy"
 	"github.com/keel-hq/keel/provider"
@@ -30,13 +29,7 @@ func TestWatchMultipleTagsWithSemver(t *testing.T) {
 			},
 		},
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	// returning some sha
 	frc := &fakeRegistryClient{
@@ -79,13 +72,7 @@ func testRunHelper(testCases []runTestCase, availableTags []string, t *testing.T
 	fp := &fakeProvider{
 		images: testImages,
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	frc := &fakeRegistryClient{
 		tagsToReturn: availableTags,
@@ -245,12 +232,6 @@ func TestWatchMultipleTagsWithCredentialsHelper(t *testing.T) {
 			},
 		},
 	}
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
 	t.Run("TestError", func(t *testing.T) {
 		mockHelper := &testingCredsHelper{
 			err: errors.New("doesn't work"),
@@ -258,7 +239,7 @@ func TestWatchMultipleTagsWithCredentialsHelper(t *testing.T) {
 		credentialshelper.RegisterCredentialsHelper("mock", mockHelper)
 		defer credentialshelper.UnregisterCredentialsHelper("mock")
 
-		providers := provider.New([]provider.Provider{fp}, am)
+		providers := provider.New([]provider.Provider{fp})
 
 		// returning some sha
 		frc := &fakeRegistryClient{
@@ -295,7 +276,7 @@ func TestWatchMultipleTagsWithCredentialsHelper(t *testing.T) {
 		credentialshelper.RegisterCredentialsHelper("mock", mockHelper)
 		defer credentialshelper.UnregisterCredentialsHelper("mock")
 
-		providers := provider.New([]provider.Provider{fp}, am)
+		providers := provider.New([]provider.Provider{fp})
 
 		// returning some sha
 		frc := &fakeRegistryClient{

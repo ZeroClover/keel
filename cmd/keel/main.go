@@ -9,12 +9,8 @@ import (
 	"context"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
-	"github.com/prometheus/client_golang/prometheus"
-
 	kube "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-	"github.com/keel-hq/keel/approvals"
 
 	// "github.com/keel-hq/keel/cache/memory"
 	"github.com/keel-hq/keel/pkg/auth"
@@ -198,35 +194,14 @@ func main() {
 	k8s.WatchDaemonSets(&g, implementer.Client(), wl, buf)
 	k8s.WatchCronJobs(&g, implementer.Client(), wl, buf)
 
-	// approvalsCache := memory.NewMemoryCache()
-	approvalsManager := approvals.New(&approvals.Opts{
-		// Cache: approvalsCache,
-		Store: sqlStore,
-	})
-
-	pendindApprovalsCounter := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Name: "pending_approvals",
-		Help: "Number of the pending approvals",
-	}, func() float64 {
-		approvals, err := approvalsManager.List()
-		if err != nil {
-			return float64(len(approvals))
-		}
-		return 0
-	})
-	prometheus.MustRegister(pendindApprovalsCounter)
-
-	go approvalsManager.StartExpiryService(ctx)
-
 	// setting up providers
 	providers := setupProviders(&ProviderOpts{
-		k8sImplementer:   implementer,
-		sender:           sender,
-		approvalsManager: approvalsManager,
-		grc:              &t.GenericResourceCache,
-		store:            sqlStore,
-		k8sClient:        implementer.Client(),
-		config:           implementer.Config(),
+		k8sImplementer: implementer,
+		sender:         sender,
+		grc:            &t.GenericResourceCache,
+		store:          sqlStore,
+		k8sClient:      implementer.Client(),
+		config:         implementer.Config(),
 	})
 
 	// registering secrets based credentials helper
@@ -246,14 +221,12 @@ func main() {
 	credentialshelper.RegisterCredentialsHelper("secrets", ch)
 
 	// trigger setup
-	// teardownTriggers := setupTriggers(ctx, providers, approvalsManager, &t.GenericResourceCache, implementer)
 	teardownTriggers := setupTriggers(ctx, &TriggerOpts{
-		providers:        providers,
-		approvalsManager: approvalsManager,
-		grc:              &t.GenericResourceCache,
-		k8sClient:        implementer,
-		store:            sqlStore,
-		uiDir:            *uiDir,
+		providers: providers,
+		grc:       &t.GenericResourceCache,
+		k8sClient: implementer,
+		store:     sqlStore,
+		uiDir:     *uiDir,
 	})
 
 	signalChan := make(chan os.Signal, 1)
@@ -285,11 +258,10 @@ func main() {
 }
 
 type ProviderOpts struct {
-	k8sImplementer   kubernetes.Implementer
-	sender           notification.Sender
-	approvalsManager approvals.Manager
-	grc              *k8s.GenericResourceCache
-	store            store.Store
+	k8sImplementer kubernetes.Implementer
+	sender         notification.Sender
+	grc            *k8s.GenericResourceCache
+	store          store.Store
 
 	k8sClient kube.Interface
 	config    *rest.Config
@@ -300,7 +272,7 @@ type ProviderOpts struct {
 func setupProviders(opts *ProviderOpts) (providers provider.Providers) {
 	var enabledProviders []provider.Provider
 
-	k8sProvider, err := kubernetes.NewProvider(opts.k8sImplementer, opts.sender, opts.approvalsManager, opts.grc)
+	k8sProvider, err := kubernetes.NewProvider(opts.k8sImplementer, opts.sender, opts.grc)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"error": err,
@@ -319,7 +291,7 @@ func setupProviders(opts *ProviderOpts) (providers provider.Providers) {
 
 	if os.Getenv(EnvHelm3Provider) == "1" || os.Getenv(EnvHelm3Provider) == "true" {
 		helm3Implementer := helm3.NewHelm3Implementer()
-		helm3Provider := helm3.NewProvider(helm3Implementer, opts.sender, opts.approvalsManager)
+		helm3Provider := helm3.NewProvider(helm3Implementer, opts.sender)
 
 		go func() {
 			err := helm3Provider.Start()
@@ -334,23 +306,21 @@ func setupProviders(opts *ProviderOpts) (providers provider.Providers) {
 
 	}
 
-	providers = provider.New(enabledProviders, opts.approvalsManager)
+	providers = provider.New(enabledProviders)
 
 	return providers
 }
 
 type TriggerOpts struct {
-	providers        provider.Providers
-	approvalsManager approvals.Manager
-	grc              *k8s.GenericResourceCache
-	k8sClient        kubernetes.Implementer
-	store            store.Store
-	uiDir            string
+	providers provider.Providers
+	grc       *k8s.GenericResourceCache
+	k8sClient kubernetes.Implementer
+	store     store.Store
+	uiDir     string
 }
 
 // setupTriggers - setting up triggers. New triggers should be added to this function. Each trigger
 // should go through all providers (or not if there is a reason) and submit events)
-// func setupTriggers(ctx context.Context, providers provider.Providers, approvalsManager approvals.Manager, grc *k8s.GenericResourceCache, k8sClient kubernetes.Implementer) (teardown func()) {
 func setupTriggers(ctx context.Context, opts *TriggerOpts) (teardown func()) {
 
 	authenticator := auth.New(&auth.Opts{
@@ -365,7 +335,6 @@ func setupTriggers(ctx context.Context, opts *TriggerOpts) (teardown func()) {
 		GRC:                   opts.grc,
 		KubernetesClient:      opts.k8sClient,
 		Providers:             opts.providers,
-		ApprovalManager:       opts.approvalsManager,
 		Store:                 opts.store,
 		Authenticator:         authenticator,
 		UIDir:                 opts.uiDir,

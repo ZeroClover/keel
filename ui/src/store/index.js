@@ -5,7 +5,6 @@ import app from './modules/app'
 import user from './modules/user'
 import tracked from './modules/tracked'
 import resources from './modules/resources'
-import approvals from './modules/approvals'
 import audit from './modules/audit'
 import stats from './modules/stats'
 import permission from './modules/permission'
@@ -20,7 +19,6 @@ export default new Vuex.Store({
     permission,
     tracked,
     resources,
-    approvals,
     audit,
     stats
   },

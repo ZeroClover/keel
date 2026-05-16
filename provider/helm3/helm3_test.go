@@ -1,16 +1,11 @@
 package helm3
 
 import (
-	"log"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/extension/notification"
 	"github.com/keel-hq/keel/internal/policy"
-	"github.com/keel-hq/keel/pkg/store/sql"
 	"github.com/keel-hq/keel/types"
 	"sigs.k8s.io/yaml"
 
@@ -18,32 +13,6 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/release"
 )
-
-func newTestingUtils() (*sql.SQLStore, func()) {
-	dir, err := os.MkdirTemp("", "whstoretest")
-	if err != nil {
-		log.Fatal(err)
-	}
-	tmpfn := filepath.Join(dir, "gorm.db")
-	// defer
-	store, err := sql.New(sql.Opts{DatabaseType: "sqlite3", URI: tmpfn})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	teardown := func() {
-		os.RemoveAll(dir) // clean up
-	}
-
-	return store, teardown
-}
-
-func approver() (*approvals.DefaultManager, func()) {
-	store, teardown := newTestingUtils()
-	return approvals.New(&approvals.Opts{
-		Store: store,
-	}), teardown
-}
 
 type fakeSender struct {
 	sentEvent types.EventNotification
@@ -259,10 +228,7 @@ keel:
 			},
 		},
 	}
-
-	approver, teardown := approver()
-	defer teardown()
-	prov := NewProvider(fakeImpl, &fakeSender{}, approver)
+	prov := NewProvider(fakeImpl, &fakeSender{})
 
 	tracked, _ := prov.TrackedImages()
 
@@ -302,10 +268,7 @@ image2:
 			},
 		},
 	}
-
-	approver, teardown := approver()
-	defer teardown()
-	prov := NewProvider(fakeImpl, &fakeSender{}, approver)
+	prov := NewProvider(fakeImpl, &fakeSender{})
 
 	tracked, _ := prov.TrackedImages()
 
@@ -353,10 +316,7 @@ keel:
 			},
 		},
 	}
-
-	approver, teardown := approver()
-	defer teardown()
-	prov := NewProvider(fakeImpl, &fakeSender{}, approver)
+	prov := NewProvider(fakeImpl, &fakeSender{})
 
 	tracked, _ := prov.TrackedImages()
 
@@ -457,10 +417,7 @@ keel:
 			},
 		},
 	}
-
-	approver, teardown := approver()
-	defer teardown()
-	provider := NewProvider(fakeImpl, &fakeSender{}, approver)
+	provider := NewProvider(fakeImpl, &fakeSender{})
 
 	err = provider.processEvent(&types.Event{
 		Repository: types.Repository{

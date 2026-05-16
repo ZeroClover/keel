@@ -102,7 +102,7 @@ func (s *SQLStore) AuditStatistics(query *types.AuditLogStatsQuery) ([]types.Aud
 
 	var logs []*types.AuditLog
 	err := s.db.Order("created_at desc").
-		Where("action in (?)", []string{"approved", "rejected", "deployment update", "release update"}).
+		Where("action in (?)", []string{"deployment update", "release update"}).
 		Where("created_at > ?", time.Now().Add(time.Hour*24*auditDays*-1)).
 		Find(&logs).Error
 	if err != nil {
@@ -131,14 +131,6 @@ func (s *SQLStore) AuditStatistics(query *types.AuditLogStatsQuery) ([]types.Aud
 				}
 			}
 			entry.Updates = entry.Updates + 1
-			days[key] = entry
-		case types.AuditActionApprovalApproved:
-			entry := days[key]
-			entry.Approved++
-			days[key] = entry
-		case types.AuditActionApprovalRejected:
-			entry := days[key]
-			entry.Rejected++
 			days[key] = entry
 		}
 

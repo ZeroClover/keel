@@ -34,26 +34,6 @@
           <template slot="footer">Average <span>{{ $store.state.stats.totalUpdatesThisPeriod/4 | round(0,0) }}</span> updates per week</template>
         </chart-card>
       </a-col>
-      <a-col :sm="24" :md="12" :xl="6" :style="{ marginBottom: '24px' }">
-        <chart-card :loading="loading" title="Pending Approvals" :total="$store.getters.approvalsPending.length">
-          <a-tooltip title="Updates in progress (awaiting approval)" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <div>
-            <mini-bar :data="$store.getters.approvalStats"/>
-          </div>
-          <template slot="footer">
-            <trend :reverseColor="true" flag="up" style="margin-right: 16px;">
-              <span slot="term">A</span>
-              {{ $store.getters.approvalsApprovedCount }}
-            </trend>
-            <trend :reverseColor="true" flag="down">
-              <span slot="term">R</span>
-              {{ $store.getters.approvalsRejectedCount }}
-            </trend>
-          </template>
-        </chart-card>
-      </a-col>
     </a-row>
 
     <a-modal
@@ -121,9 +101,6 @@
           <a-badge v-if="resource.policy === 'nil policy'" status="default" text="none" />
           <a-badge v-else status="success" :text="resource.policy"/>
         </span>
-        <span slot="approvals" slot-scope="text, resource">
-          {{ resource._required_approvals ? resource._required_approvals : '-' }}
-        </span>
         <!-- labels -->
         <span slot="labels" slot-scope="text, resource">
           <a-tag v-for="(item, key, index) in resource._keel_opts" color="blue" :key="index">
@@ -161,13 +138,6 @@
               Policy<a-icon type="down" />
             </a-button>
           </a-dropdown>
-          &nbsp;
-          <a-tooltip placement="top" >
-            <a-button-group>
-              <a-button size="small" type="primary" icon="up" @click="setApproval(resource, true)"></a-button>
-              <a-button size="small" type="primary" icon="down" @click="setApproval(resource, false)"></a-button>
-            </a-button-group>
-          </a-tooltip>
           &nbsp;
           <a-tooltip placement="top" >
             <template slot="title">
@@ -232,11 +202,6 @@ export default {
         key: 'policy',
         scopedSlots: { customRender: 'policy' }
       }, {
-        title: 'Required Approvals',
-        dataIndex: 'approvals',
-        key: 'approvals',
-        scopedSlots: { customRender: 'approvals' }
-      }, {
         title: 'Images',
         key: 'images',
         dataIndex: 'images',
@@ -249,7 +214,7 @@ export default {
         width: 230,
         scopedSlots: { customRender: 'labels' }
       }, {
-        title: 'Policy & Approvals Control',
+        title: 'Policy',
         key: 'action',
         // fixed: 'right',
         scopedSlots: { customRender: 'action' }
@@ -378,57 +343,15 @@ export default {
       })
     },
 
-    setApproval (resource, increase) {
-      const payload = {
-        identifier: encodeURI(resource.identifier),
-        provider: resource.provider
-      }
-
-      const current = resource.annotations['keel.sh/approvals']
-      if (increase) {
-        // increasing approvals count
-        if (current) {
-          payload.votesRequired = parseInt(current, 10) + 1
-        } else {
-          payload.votesRequired = 1
-        }
-      } else {
-        // decreasing approvals count
-        if (current > 1) {
-          payload.votesRequired = parseInt(current, 10) - 1
-        } else {
-          payload.votesRequired = 0
-        }
-      }
-
-      this.$store.dispatch('SetApproval', payload).then(() => {
-        const error = this.$store.state.approvals.error
-        if (error === null) {
-          this.$notification.success({
-            message: 'Resource approvals updated!',
-            description: `${resource.kind} ${resource.name} approvals set to ${payload.votesRequired}!`
-          })
-        } else {
-          this.$notification['error']({
-            message: 'Failed to resource approval',
-            description: `Error: ${error.body}`,
-            duration: 4
-          })
-        }
-        this.$store.dispatch('GetResources')
-      })
-    },
-
     refresh () {
       this.fetchData()
       this.$notification.info({
         message: 'Updating..',
-        description: `fetching approvals, resources and stats`
+        description: `fetching resources and stats`
       })
     },
 
     fetchData () {
-      this.$store.dispatch('GetApprovals')
       this.$store.dispatch('GetResources')
       this.$store.dispatch('GetStats')
     },

@@ -12,12 +12,6 @@ type Store interface {
 	AuditLogsCount(query *types.AuditLogQuery) (int, error)
 	AuditStatistics(query *types.AuditLogStatsQuery) ([]types.AuditLogStats, error)
 
-	CreateApproval(approval *types.Approval) (*types.Approval, error)
-	UpdateApproval(approval *types.Approval) error
-	GetApproval(q *types.GetApprovalQuery) (*types.Approval, error)
-	ListApprovals(q *types.GetApprovalQuery) ([]*types.Approval, error)
-	DeleteApproval(approval *types.Approval) error
-
 	OK() bool
 	Close() error
 }

@@ -9,7 +9,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/pkg/store/sql"
 	"github.com/keel-hq/keel/provider"
 	"github.com/keel-hq/keel/types"
@@ -88,13 +87,7 @@ func TestCheckDeployment(t *testing.T) {
 		},
 	}
 
-	store, teardown := newTestingUtils()
-	defer teardown()
-	am := approvals.New(&approvals.Opts{
-		Store: store,
-	})
-
-	providers := provider.New([]provider.Provider{fp}, am)
+	providers := provider.New([]provider.Provider{fp})
 
 	fs := &fakeSubscriber{}
 	mng := &DefaultManager{

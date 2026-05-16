@@ -20,7 +20,7 @@
 
 ## Upgrading
 
-This release removes the legacy HipChat sender and interactive chat bot integrations. Remove any `HIPCHAT_*`, `SLACK_APP_TOKEN`, and `SLACK_APPROVALS_CHANNEL` settings from manifests, Helm values, and local environments. In-process chat command endpoints such as `/v1/chat` are no longer available.
+This release removes the legacy HipChat sender, interactive chat bot integrations, and the built-in approvals workflow. Remove any `HIPCHAT_*`, `SLACK_APP_TOKEN`, `SLACK_APPROVALS_CHANNEL`, `keel.sh/approvals`, and `keel.sh/approvalDeadline` settings from manifests, Helm values, and local environments. In-process chat command endpoints such as `/v1/chat` and approval endpoints such as `/v1/approvals` are no longer available. On startup Keel runs `DROP TABLE IF EXISTS approvals`; back up `/data/keel.db` before upgrading if historical approval rows are needed.
 
 Keel is a tool for automating [Kubernetes](https://kubernetes.io/) deployment updates. Keel is stateless, robust and lightweight.
 

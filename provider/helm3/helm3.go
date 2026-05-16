@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/internal/policy"
 	"github.com/keel-hq/keel/types"
 	"github.com/keel-hq/keel/util/image"
@@ -113,8 +112,6 @@ type KeelChartConfig struct {
 	MatchPreRelease      bool              `json:"matchPreRelease"`
 	Trigger              types.TriggerType `json:"trigger"`
 	PollSchedule         string            `json:"pollSchedule"`
-	Approvals            int               `json:"approvals"`        // Minimum required approvals
-	ApprovalDeadline     int               `json:"approvalDeadline"` // Deadline in hours
 	Images               []ImageDetails    `json:"images"`
 	NotificationChannels []string          `json:"notificationChannels"` // optional notification channels
 
@@ -136,20 +133,17 @@ type Provider struct {
 
 	sender notification.Sender
 
-	approvalManager approvals.Manager
-
 	events chan *types.Event
 	stop   chan struct{}
 }
 
 // NewProvider - create new Helm provider
-func NewProvider(implementer Implementer, sender notification.Sender, approvalManager approvals.Manager) *Provider {
+func NewProvider(implementer Implementer, sender notification.Sender) *Provider {
 	return &Provider{
-		implementer:     implementer,
-		approvalManager: approvalManager,
-		sender:          sender,
-		events:          make(chan *types.Event, 100),
-		stop:            make(chan struct{}),
+		implementer: implementer,
+		sender:      sender,
+		events:      make(chan *types.Event, 100),
+		stop:        make(chan struct{}),
 	}
 }
 
@@ -261,9 +255,7 @@ func (p *Provider) processEvent(event *types.Event) (err error) {
 		return err
 	}
 
-	approved := p.checkForApprovals(event, plans)
-
-	return p.applyPlans(approved)
+	return p.applyPlans(plans)
 }
 
 func (p *Provider) createUpdatePlans(event *types.Event) ([]*UpdatePlan, error) {
@@ -339,15 +331,6 @@ func (p *Provider) applyPlans(plans []*UpdatePlan) error {
 				},
 			})
 			continue
-		}
-
-		err = p.updateComplete(plan)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error":     err,
-				"name":      plan.Name,
-				"namespace": plan.Namespace,
-			}).Debug("provider.helm3: got error while resetting approvals counter after successful update")
 		}
 
 		var msg string

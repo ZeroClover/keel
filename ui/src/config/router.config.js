@@ -29,14 +29,6 @@ export const asyncRouterMap = [
       },
 
       {
-        path: '/approvals',
-        name: 'approvals',
-        hideChildrenInMenu: true,
-        meta: { title: 'Approvals', keepAlive: true, icon: 'form', permission: [ 'dashboard' ], auth: true },
-        component: () => import('@/views/approvals/Approvals')
-      },
-
-      {
         path: '/audit-logs',
         name: 'audit',
         component: () => import('@/views/audit/AuditLogs'),
@@ -78,14 +70,6 @@ export const constantRouterMap = [
   //       hideChildrenInMenu: true,
   //       meta: { title: 'Tracked Images', keepAlive: true, icon: 'reconciliation', permission: [ 'dashboard' ], auth: true },
   //       component: () => import('@/views/tracked/TrackedImageList')
-  //     },
-
-  //     {
-  //       path: '/approvals',
-  //       name: 'approvals',
-  //       hideChildrenInMenu: true,
-  //       meta: { title: 'Approvals', keepAlive: true, icon: 'form', permission: [ 'dashboard' ], auth: true },
-  //       component: () => import('@/views/approvals/Approvals')
   //     },
 
   //     {

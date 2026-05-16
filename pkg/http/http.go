@@ -15,7 +15,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/negroni"
 
-	"github.com/keel-hq/keel/approvals"
 	"github.com/keel-hq/keel/internal/k8s"
 	"github.com/keel-hq/keel/pkg/auth"
 	"github.com/keel-hq/keel/pkg/store"
@@ -33,8 +32,6 @@ type Opts struct {
 
 	// available providers
 	Providers provider.Providers
-
-	ApprovalManager approvals.Manager
 
 	Authenticator auth.Authenticator
 
@@ -54,11 +51,10 @@ type TriggerServer struct {
 	grc              *k8s.GenericResourceCache
 	kubernetesClient kubernetes.Implementer
 
-	providers        provider.Providers
-	approvalsManager approvals.Manager
-	port             int
-	server           *http.Server
-	router           *mux.Router
+	providers provider.Providers
+	port      int
+	server    *http.Server
+	router    *mux.Router
 
 	store         store.Store
 	authenticator auth.Authenticator
@@ -75,7 +71,6 @@ func NewTriggerServer(opts *Opts) *TriggerServer {
 		grc:                   opts.GRC,
 		kubernetesClient:      opts.KubernetesClient,
 		providers:             opts.Providers,
-		approvalsManager:      opts.ApprovalManager,
 		router:                mux.NewRouter(),
 		authenticator:         opts.Authenticator,
 		store:                 opts.Store,
@@ -139,13 +134,6 @@ func (s *TriggerServer) registerRoutes(mux *mux.Router) {
 		mux.HandleFunc("/v1/auth/user", s.requireAdminAuthorization(s.userInfoHandler)).Methods("GET", "OPTIONS")
 		mux.HandleFunc("/v1/auth/logout", s.requireAdminAuthorization(s.logoutHandler)).Methods("POST", "GET", "OPTIONS")
 		mux.HandleFunc("/v1/auth/refresh", s.requireAdminAuthorization(s.refreshHandler)).Methods("GET", "OPTIONS")
-
-		// approvals
-		mux.HandleFunc("/v1/approvals", s.requireAdminAuthorization(s.approvalsHandler)).Methods("GET", "OPTIONS")
-		// approving/rejecting
-		mux.HandleFunc("/v1/approvals", s.requireAdminAuthorization(s.approvalApproveHandler)).Methods("POST", "OPTIONS")
-		// updating required approvals count
-		mux.HandleFunc("/v1/approvals", s.requireAdminAuthorization(s.approvalSetHandler)).Methods("PUT", "OPTIONS")
 
 		// available resources
 		mux.HandleFunc("/v1/resources", s.requireAdminAuthorization(s.resourcesHandler)).Methods("GET", "OPTIONS")
