@@ -18,6 +18,10 @@
 * Website [https://keel.sh](https://keel.sh)
 * Slack - [kubernetes.slack.com](https://kubernetes.slack.com) look for channel #keel
 
+## Upgrading
+
+This release removes the legacy HipChat sender and interactive chat bot integrations. Remove any `HIPCHAT_*`, `SLACK_APP_TOKEN`, and `SLACK_APPROVALS_CHANNEL` settings from manifests, Helm values, and local environments. In-process chat command endpoints such as `/v1/chat` are no longer available.
+
 Keel is a tool for automating [Kubernetes](https://kubernetes.io/) deployment updates. Keel is stateless, robust and lightweight.
 
 Keel provides several key features:
@@ -34,7 +38,7 @@ Keel provides several key features:
 
 *  __[Polling](https://keel.sh/docs/#polling)__ - when webhooks and pubsub aren't available - Keel can still be useful by checking Docker Registry for new tags (if current tag is semver) or same tag SHA digest change (ie: `latest`).
 
-* __Notifications__ - out of the box Keel has Slack, Hipchat, Mattermost and standard webhook notifications, more info [here](https://keel.sh/docs/#notifications)
+* __Notifications__ - out of the box Keel has Slack, Mattermost, Teams, Discord, Mail and standard webhook notifications, more info [here](https://keel.sh/docs/#notifications)
 
 <p align="center">
   <a href="https://keel.sh" target="_blank"><img width="700"src="https://keel.sh/img/keel_high_level.png"></a>

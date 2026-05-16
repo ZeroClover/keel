@@ -59,7 +59,6 @@ Keel is a **Kubernetes deployment automation tool** written in Go. It watches co
 | `internal/policy/` | **Version matching** - Semver, glob, force, regexp | `policy.go`, `semver.go` |
 | `extension/` | **Plugins** - Notifications, credentials helpers | `notification/`, `credentialshelper/` |
 | `approvals/` | **Approval workflow** - Manual approval before updates | `approvals.go` |
-| `bot/` | **Chat bots** - Slack/HipChat for approvals | `bot.go`, `slack/`, `hipchat/` |
 | `registry/` | **Registry client** - Docker registry API | `registry.go` |
 | `secrets/` | **K8s secrets** - Extract registry credentials | `secrets.go` |
 | `ui/` | **Web dashboard** - Vue.js frontend | `src/` |
@@ -141,7 +140,7 @@ Extensible notification system using sender registration pattern:
 func RegisterSender(name string, s Sender) { ... }
 ```
 
-**Available senders:** Slack, Teams, Discord, Mattermost, HipChat, Mail, Webhook, Auditor
+**Available senders:** Slack, Teams, Discord, Mattermost, Mail, Webhook, Auditor
 
 Notifications are registered via blank imports in `cmd/keel/main.go`:
 ```go
@@ -270,7 +269,7 @@ make image
 | Modify K8s update behavior | `provider/kubernetes/` |
 | Add notification channel | `extension/notification/` |
 | Change polling behavior | `trigger/poll/` |
-| Modify approval workflow | `approvals/`, `bot/` |
+| Modify approval workflow | `approvals/` |
 | Add registry authentication | `extension/credentialshelper/` |
 | Parse image references | `util/` |
 | HTTP API endpoints | `pkg/http/` |

@@ -19,7 +19,7 @@ Keel provides several key features:
 
 *  __[Polling](https://keel.sh/user-guide/#polling-deployment-example)__ - when webhooks and pubsub aren't available - Keel can still be useful by checking Docker Registry for new tags (if current tag is semver) or same tag SHA digest change (ie: `latest`).
 
-* __Notifications__ - out of the box Keel has Slack, HipChat, Mattermost, Teams and standard webhook notifications, more info [here](https://keel.sh/user-guide/#notifications)
+* __Notifications__ - out of the box Keel has Slack, Mattermost, Teams, Discord, Mail and standard webhook notifications, more info [here](https://keel.sh/user-guide/#notifications)
 
 
 ## Installing
@@ -95,11 +95,9 @@ The following table lists has the main configurable parameters (polling, trigger
 | `webhook.enabled`                           | Enable/disable Webhook Notification    | `false`                                                   |
 | `webhook.endpoint`                          | Remote webhook endpoint                |                                                           |
 | `slack.enabled`                             | Enable/disable Slack Notification      | `false`                                                   |
-| `slack.botName`                             | Name of the Slack bot                  |                                                           |
+| `slack.botName`                             | Name of the Slack notification sender  |                                                           |
 | `slack.botToken`                            | Slack bot token                        |                                                           |
-| `slack.appToken`                            | Slack application level token          |                                                           |
 | `slack.channel`                             | Slack channel                          |                                                           |
-| `slack.approvalsChannel`                    | Slack channel for approvals            |                                                           |
 | `teams.enabled`                             | Enable/disable MS Teams Notification   | `false`                                                   |
 | `teams.webhookUrl`                          | MS Teams Connector's webhook url       |                                                           |
 | `service.enabled`                           | Enable/disable Keel service            | `false`                                                   |
@@ -112,13 +110,6 @@ The following table lists has the main configurable parameters (polling, trigger
 | `webhookRelay.secret`                       | WebhookRelay secret                    |                                                           |
 | `webhookRelay.bucket`                       | WebhookRelay bucket                    |                                                           |
 | `rbac.enabled`                              | Enable/disable RBAC installation       | `true`                                                    |
-| `hipchat.enabled`                           | Enable/disable Hipchat integration     | `false`                                                   |
-| `hipchat.token`                             | Hipchat token                          |                                                           |
-| `hipchat.channel`                           | Hipchat channel                        |                                                           |
-| `hipchat.approvalsChannel`                  | Hipchat channel for approvals          |                                                           |
-| `hipchat.botName`                           | Name of the Hipchat bot                |                                                           |
-| `hipchat.userName`                          | Hipchat username in Jabber format      |                                                           |
-| `hipchat.password`                          | Hipchat password for approvals user    |                                                           |
 | `mail.enabled`                              | Enable/disable mail notifications      | `false`                                                   |
 | `mail.from`                                 | Mail sender address                    |                                                           |
 | `mail.to`                                   | Mail destination address               |                                                           |
@@ -129,7 +120,6 @@ The following table lists has the main configurable parameters (polling, trigger
 | `mattermost.enabled`                        | Enable/disable Mattermost integration  | `false`                                                   |
 | `mattermost.endpoint`                       | Mattermost API endpoint                |                                                           |
 | `googleApplicationCredentials`              | GCP Service account key configurable   |                                                           |
-| `hipchat.password`                          | Hipchat password for approvals user    |                                                           |
 | `gcloud.managedCertificates.enabled`        | Enable/Disable managed ssl on Gcloud   | `false`                                                   |
 | `gcloud.managedCertificates.domains`        | List of managed certificate domains    | `[]`                                                      |
 | `ingress.enabled`                           | Enables Ingress                        | `false`                                                   |

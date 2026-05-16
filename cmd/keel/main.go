@@ -15,7 +15,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/keel-hq/keel/approvals"
-	"github.com/keel-hq/keel/bot"
 
 	// "github.com/keel-hq/keel/cache/memory"
 	"github.com/keel-hq/keel/pkg/auth"
@@ -41,7 +40,6 @@ import (
 	// notification extensions
 	"github.com/keel-hq/keel/extension/notification/auditor"
 	_ "github.com/keel-hq/keel/extension/notification/discord"
-	_ "github.com/keel-hq/keel/extension/notification/hipchat"
 	_ "github.com/keel-hq/keel/extension/notification/mail"
 	_ "github.com/keel-hq/keel/extension/notification/mattermost"
 	_ "github.com/keel-hq/keel/extension/notification/slack"
@@ -52,10 +50,6 @@ import (
 	_ "github.com/keel-hq/keel/extension/credentialshelper/aws"
 	_ "github.com/keel-hq/keel/extension/credentialshelper/gcr"
 	secretsCredentialsHelper "github.com/keel-hq/keel/extension/credentialshelper/secrets"
-
-	// bots
-	_ "github.com/keel-hq/keel/bot/hipchat"
-	_ "github.com/keel-hq/keel/bot/slack"
 
 	log "github.com/sirupsen/logrus"
 	// importing to ensure correct dependencies
@@ -262,8 +256,6 @@ func main() {
 		uiDir:            *uiDir,
 	})
 
-	bot.Run(implementer, approvalsManager)
-
 	signalChan := make(chan os.Signal, 1)
 	cleanupDone := make(chan bool)
 	signal.Notify(signalChan, os.Interrupt)
@@ -283,7 +275,6 @@ func main() {
 				}()
 				providers.Stop()
 				teardownTriggers()
-				bot.Stop()
 
 				cleanupDone <- true
 			}

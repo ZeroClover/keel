@@ -11,21 +11,9 @@ const WebhookEndpointEnv = "WEBHOOK_ENDPOINT"
 
 // slack bot/token
 const (
-	EnvSlackBotToken         = "SLACK_BOT_TOKEN"
-	EnvSlackAppToken         = "SLACK_APP_TOKEN"
-	EnvSlackBotName          = "SLACK_BOT_NAME"
-	EnvSlackChannels         = "SLACK_CHANNELS"
-	EnvSlackApprovalsChannel = "SLACK_APPROVALS_CHANNEL"
-
-	EnvHipchatToken    = "HIPCHAT_TOKEN"
-	EnvHipchatBotName  = "HIPCHAT_BOT_NAME"
-	EnvHipchatChannels = "HIPCHAT_CHANNELS"
-
-	EnvHipchatApprovalsChannel   = "HIPCHAT_APPROVALS_CHANNEL"
-	EnvHipchatApprovalsUserName  = "HIPCHAT_APPROVALS_USER_NAME"
-	EnvHipchatApprovalsBotName   = "HIPCHAT_APPROVALS_BOT_NAME"
-	EnvHipchatApprovalsPasswort  = "HIPCHAT_APPROVALS_PASSWORT"
-	EnvHipchatConnectionAttempts = "HIPCHAT_CONNECTION_ATTEMPTS"
+	EnvSlackBotToken = "SLACK_BOT_TOKEN"
+	EnvSlackBotName  = "SLACK_BOT_NAME"
+	EnvSlackChannels = "SLACK_CHANNELS"
 
 	// Mattermost webhook endpoint, see https://docs.mattermost.com/developer/webhooks-incoming.html
 	// for documentation on setting it up
