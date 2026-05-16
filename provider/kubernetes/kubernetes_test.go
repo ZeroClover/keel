@@ -140,7 +140,10 @@ func TestCreateUpdatePlansWithSemVerPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plans, err := provider.createUpdatePlans(&types.Repository{Name: "gcr.io/v2-namespace/hello-world", Tag: "1.1.2"})
+	plans, err := provider.createUpdatePlans(&types.Event{
+		Repository:  types.Repository{Name: "gcr.io/v2-namespace/hello-world", Tag: "1.1.2"},
+		TriggerName: types.TriggerTypePoll.String(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +164,10 @@ func TestCreateUpdatePlansSkipsLegacyPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plans, err := provider.createUpdatePlans(&types.Repository{Name: "gcr.io/v2-namespace/hello-world", Tag: "1.1.2"})
+	plans, err := provider.createUpdatePlans(&types.Event{
+		Repository:  types.Repository{Name: "gcr.io/v2-namespace/hello-world", Tag: "1.1.2"},
+		TriggerName: types.TriggerTypePoll.String(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

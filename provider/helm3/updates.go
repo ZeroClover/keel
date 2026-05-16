@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func checkRelease(repo *types.Repository, namespace, name string, chart *hapi_chart.Chart, config map[string]interface{}) (plan *UpdatePlan, shouldUpdateRelease bool, err error) {
+func checkRelease(repo *types.Repository, triggerName, namespace, name string, chart *hapi_chart.Chart, config map[string]interface{}) (plan *UpdatePlan, shouldUpdateRelease bool, err error) {
 
 	plan = &UpdatePlan{
 		Chart:       chart,
@@ -77,7 +77,11 @@ func checkRelease(repo *types.Repository, namespace, name string, chart *hapi_ch
 			continue
 		}
 
-		shouldUpdate, err := policy.AllowsTag(keelCfg.Plc, keelCfg.Filter, imageRef.Tag(), eventRepoRef.Tag())
+		if imageRef.Tag() == eventRepoRef.Tag() {
+			continue
+		}
+
+		shouldUpdate, err := shouldUpdateReleaseFromEvent(keelCfg.Plc, keelCfg.Filter, imageRef.Tag(), eventRepoRef.Tag(), triggerName)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error":           err,
@@ -117,4 +121,11 @@ func checkRelease(repo *types.Repository, namespace, name string, chart *hapi_ch
 	}
 
 	return plan, shouldUpdateRelease, nil
+}
+
+func shouldUpdateReleaseFromEvent(plc types.Policy, filter types.Filter, currentTag, eventTag, triggerName string) (bool, error) {
+	if triggerName == types.TriggerTypePoll.String() {
+		return true, nil
+	}
+	return policy.AllowsTag(plc, filter, currentTag, eventTag)
 }

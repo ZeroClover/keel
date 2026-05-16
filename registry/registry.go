@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/keel-hq/keel/registry/docker"
 
@@ -30,6 +31,7 @@ type Repository struct {
 type Client interface {
 	Get(opts Opts) (*Repository, error)
 	Digest(opts Opts) (string, error)
+	GetCreatedTime(opts Opts) (time.Time, error)
 }
 
 // New - new registry client
@@ -145,4 +147,29 @@ INIT_CLIENT:
 	}
 
 	return manifestDigest.String(), nil
+}
+
+// GetCreatedTime gets image config created time for repo tag.
+func (c *DefaultClient) GetCreatedTime(opts Opts) (time.Time, error) {
+	if opts.Tag == "" {
+		return time.Time{}, ErrTagNotSupplied
+	}
+
+	// fallback to HTTP if the registry doesn't speak HTTPS https://github.com/keel-hq/keel/issues/331
+INIT_CLIENT:
+	hub, err := c.getRegistryClient(opts.Registry, opts.Username, opts.Password)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	created, err := hub.GetCreatedTime(opts.Name, opts.Tag)
+	if err != nil {
+		if strings.Contains(err.Error(), "server gave HTTP response to HTTPS client") && strings.HasPrefix(opts.Registry, "https://") && c.insecure {
+			opts.Registry = strings.Replace(opts.Registry, "https://", "http://", 1)
+			goto INIT_CLIENT
+		}
+		return time.Time{}, err
+	}
+
+	return created, nil
 }

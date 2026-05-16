@@ -1,10 +1,15 @@
 package poll
 
 import (
+	"fmt"
+	"sort"
+	"time"
+
 	"github.com/keel-hq/keel/extension/credentialshelper"
 	"github.com/keel-hq/keel/provider"
 	"github.com/keel-hq/keel/registry"
 	"github.com/keel-hq/keel/types"
+	"github.com/keel-hq/keel/util/image"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -16,16 +21,18 @@ type WatchRepositoryTagsJob struct {
 	providers      provider.Providers
 	registryClient registry.Client
 	details        *watchDetails
+	cache          *createdTimeCache
 
 	// latests map[string]string // a map of prerelease tags and their corresponding latest versions
 }
 
 // NewWatchRepositoryTagsJob - new tags watcher job
-func NewWatchRepositoryTagsJob(providers provider.Providers, registryClient registry.Client, details *watchDetails) *WatchRepositoryTagsJob {
+func NewWatchRepositoryTagsJob(providers provider.Providers, registryClient registry.Client, details *watchDetails, cache *createdTimeCache) *WatchRepositoryTagsJob {
 	return &WatchRepositoryTagsJob{
 		providers:      providers,
 		registryClient: registryClient,
 		details:        details,
+		cache:          cache,
 		// latests:        details.trackedImage.SemverPreReleaseTags,
 	}
 }
@@ -100,20 +107,28 @@ func (j *WatchRepositoryTagsJob) computeEvents(tags []string) ([]types.Event, er
 
 		// The fact that they are related, does not mean they share the exact same Policy configuration, so wee need
 		// to calculate the tags here for each image.
+		filter := trackedImage.Filter
 		candidates := tags
-		if trackedImage.Filter != nil {
-			trackedImage.Filter.Apply(tags)
-			candidates = trackedImage.Filter.Items()
+		if trackedImage.Policy.Type() == types.PolicyTypeForce {
+			candidates = sortByCreatedTime(originalTagsForForce(tags, filter), trackedImage.Image, j.registryClient, j.cache)
+		} else if filter != nil {
+			filter.Apply(tags)
+			candidates = filter.Items()
 		}
 
 		latestKey, err := trackedImage.Policy.Latest(candidates)
 		if err != nil {
+			log.WithFields(log.Fields{
+				"error":  err,
+				"image":  trackedImage.Image.String(),
+				"policy": trackedImage.Policy.Name(),
+			}).Debug("trigger.poll.WatchRepositoryTagsJob: failed to select latest tag")
 			continue
 		}
 
 		latest := latestKey
-		if trackedImage.Filter != nil {
-			latest = trackedImage.Filter.GetOriginalTag(latestKey)
+		if trackedImage.Policy.Type() != types.PolicyTypeForce && filter != nil {
+			latest = filter.GetOriginalTag(latestKey)
 		}
 		if latest == "" || trackedImage.Image.Tag() == latest || exists(latest, events) {
 			continue
@@ -135,6 +150,79 @@ func (j *WatchRepositoryTagsJob) computeEvents(tags []string) ([]types.Event, er
 	}).Debug("trigger.poll.WatchRepositoryTagsJob: events: ", events)
 
 	return events, nil
+}
+
+func originalTagsForForce(tags []string, filter types.Filter) []string {
+	if filter == nil {
+		return append([]string(nil), tags...)
+	}
+
+	filter.Apply(tags)
+	items := filter.Items()
+	originals := make([]string, 0, len(items))
+	for _, key := range items {
+		original := filter.GetOriginalTag(key)
+		if original != "" {
+			originals = append(originals, original)
+		}
+	}
+	return originals
+}
+
+func sortByCreatedTime(tags []string, img *image.Reference, client registry.Client, cache *createdTimeCache) []string {
+	type tagCreated struct {
+		tag     string
+		created time.Time
+		ok      bool
+	}
+
+	registryURL := img.Scheme() + "://" + img.Registry()
+	createdTags := make([]tagCreated, 0, len(tags))
+	for _, tag := range tags {
+		opts := registry.Opts{
+			Registry: registryURL,
+			Name:     img.ShortName(),
+			Tag:      tag,
+		}
+
+		manifestDigest, err := client.Digest(opts)
+		if err != nil || manifestDigest == "" {
+			createdTags = append(createdTags, tagCreated{tag: tag})
+			continue
+		}
+
+		cacheKey := fmt.Sprintf("%s/%s@%s", registryURL, img.ShortName(), manifestDigest)
+		if created, ok := cache.Get(cacheKey); ok {
+			createdTags = append(createdTags, tagCreated{tag: tag, created: created, ok: true})
+			continue
+		}
+
+		created, err := client.GetCreatedTime(opts)
+		if err != nil || created.IsZero() {
+			createdTags = append(createdTags, tagCreated{tag: tag})
+			continue
+		}
+
+		cache.Set(cacheKey, created)
+		createdTags = append(createdTags, tagCreated{tag: tag, created: created, ok: true})
+	}
+
+	sort.Slice(createdTags, func(i, j int) bool {
+		left, right := createdTags[i], createdTags[j]
+		if left.ok != right.ok {
+			return left.ok
+		}
+		if left.ok && !left.created.Equal(right.created) {
+			return left.created.After(right.created)
+		}
+		return left.tag < right.tag
+	})
+
+	sorted := make([]string, 0, len(createdTags))
+	for _, item := range createdTags {
+		sorted = append(sorted, item.tag)
+	}
+	return sorted
 }
 
 func exists(tag string, events []types.Event) bool {

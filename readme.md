@@ -36,7 +36,7 @@ Keel provides several key features:
 
 * __[Native, DockerHub, Quay and Azure container registry webhooks](https://keel.sh/docs/#triggers) support__ -  once webhook is received impacted deployments will be identified and updated.
 
-*  __[Polling](https://keel.sh/docs/#polling)__ - when webhooks and pubsub aren't available - Keel can still be useful by checking Docker Registry for new tags (if current tag is semver) or same tag SHA digest change (ie: `latest`).
+*  __[Polling](https://keel.sh/docs/#polling)__ - when webhooks and pubsub aren't available - Keel can still be useful by checking Docker Registry for new tags and selecting updates with the configured policy.
 
 * __Notifications__ - out of the box Keel has Slack, Mattermost, Teams, Discord, Mail and standard webhook notifications, more info [here](https://keel.sh/docs/#notifications)
 
@@ -174,7 +174,7 @@ No additional configuration is required. Enabling continuous delivery for your w
 | `semver:<constraint>` | `semver:>=1.0.0` | Selects the highest tag matching a Masterminds semver v3 constraint. Use `>=1.0.0-0` to include pre-releases. |
 | `alphabetical[:asc\|desc]` | `alphabetical:desc` | Selects the lexicographically lowest (`asc`, default) or highest (`desc`) tag. |
 | `numerical[:asc\|desc]` | `numerical:desc` | Selects the numerically lowest (`asc`, default) or highest (`desc`) extracted tag. Non-numeric candidates are errors. |
-| `force` | `force` | Selects the first candidate supplied by the caller. |
+| `force` | `force` | Polling sorts matching tags by image config `created` time descending, then selects the newest candidate. Webhooks and pubsub treat the incoming tag as the candidate. |
 
 Use `keel.sh/filterTags` to keep only tags matching an RE2 regular expression, and `keel.sh/extract` to pass a capture group to the policy:
 
@@ -184,6 +184,8 @@ annotations:
   keel.sh/filterTags: "^main-[a-f0-9]+-(?P<ts>[0-9]+)$"
   keel.sh/extract: "$ts"
 ```
+
+Force policy depends on registry image metadata when polling: tags with missing or unreadable `created` timestamps are treated as older than tags with valid timestamps. Prefer immutable tags with `semver`, `alphabetical`, or `numerical` policies for routine delivery, and use registry webhooks or a GitOps controller to publish explicit immutable updates instead of relying on mutable tags such as `latest`.
 
 #### Upgrading from older policies
 

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -84,7 +85,7 @@ func testRunHelper(testCases []runTestCase, availableTags []string, t *testing.T
 		trackedImage: fp.images[0],
 	}
 
-	job := NewWatchRepositoryTagsJob(providers, frc, details)
+	job := NewWatchRepositoryTagsJob(providers, frc, details, newCreatedTimeCache())
 
 	job.Run()
 
@@ -210,6 +211,161 @@ func TestWatchAllTagsMixedPolicyAll(t *testing.T) {
 		{currentTag: "1.0.0", expectedTag: "1.5.0", bumpPolicy: mustSemVerPolicy(">=0.0.0")},
 		{currentTag: "1.6.0-alpha", expectedTag: "1.8.0-alpha", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}
 	testRunHelper(testCases, availableTags, t)
+}
+
+func TestForcePolicySortsByCreatedTime(t *testing.T) {
+	fp, job, _ := forceJob("tag-A", []string{"tag-A", "tag-B", "tag-C"}, nil, &fakeRegistryClient{
+		digestByTag: map[string]string{
+			"tag-A": "sha256:a",
+			"tag-B": "sha256:b",
+			"tag-C": "sha256:c",
+		},
+		createdByTag: map[string]time.Time{
+			"tag-A": time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			"tag-B": time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+			"tag-C": time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}, newCreatedTimeCache())
+
+	job.Run()
+
+	if len(fp.submitted) != 1 {
+		t.Fatalf("submitted = %d, want 1", len(fp.submitted))
+	}
+	if fp.submitted[0].Repository.Tag != "tag-B" {
+		t.Fatalf("tag = %s, want tag-B", fp.submitted[0].Repository.Tag)
+	}
+}
+
+func TestForcePolicyMissingCreatedTimeGoesLastAndIsNotCached(t *testing.T) {
+	cache := newCreatedTimeCache()
+	frc := &fakeRegistryClient{
+		digestByTag: map[string]string{
+			"a": "sha256:a",
+			"b": "sha256:b",
+			"c": "sha256:c",
+		},
+		createdByTag: map[string]time.Time{
+			"a": time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			"b": time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+		createdErr: map[string]error{"c": errors.New("missing created")},
+	}
+	fp, job, _ := forceJob("a", []string{"a", "b", "c"}, nil, frc, cache)
+
+	events, err := job.computeEvents([]string{"a", "b", "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Repository.Tag != "b" {
+		t.Fatalf("events = %#v, want tag b", events)
+	}
+	events, err = job.computeEvents([]string{"a", "b", "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].Repository.Tag != "b" {
+		t.Fatalf("events = %#v, want tag b", events)
+	}
+
+	if countString(frc.createdCalls, "a") != 1 || countString(frc.createdCalls, "b") != 1 {
+		t.Fatalf("successful created calls were not cached: %#v", frc.createdCalls)
+	}
+	if countString(frc.createdCalls, "c") != 2 {
+		t.Fatalf("failed created call should not be cached: %#v", frc.createdCalls)
+	}
+	if _, ok := cache.Get("https://index.docker.io/foo/bar@sha256:c"); ok {
+		t.Fatal("failed created time was cached")
+	}
+	if len(fp.submitted) != 0 {
+		t.Fatalf("computeEvents should not submit events directly")
+	}
+}
+
+func TestForcePolicyWithFilterUsesOriginalTagsForCreatedTime(t *testing.T) {
+	filter := mustRegexFilter(`^release-(?P<n>[0-9]+)$`, "$n")
+	frc := &fakeRegistryClient{
+		digestByTag: map[string]string{
+			"release-1": "sha256:release-1",
+			"release-2": "sha256:release-2",
+		},
+		createdByTag: map[string]time.Time{
+			"release-1": time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			"release-2": time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	fp, job, _ := forceJob("release-1", []string{"release-1", "release-2", "dev-3"}, filter, frc, newCreatedTimeCache())
+
+	job.Run()
+
+	if len(fp.submitted) != 1 {
+		t.Fatalf("submitted = %d, want 1", len(fp.submitted))
+	}
+	if fp.submitted[0].Repository.Tag != "release-2" {
+		t.Fatalf("tag = %s, want release-2", fp.submitted[0].Repository.Tag)
+	}
+	if strings.Join(frc.createdCalls, ",") != "release-1,release-2" {
+		t.Fatalf("created calls = %#v, want original release tags", frc.createdCalls)
+	}
+}
+
+func TestSemverPolicyBypassesCreatedTime(t *testing.T) {
+	fp, job := tagsJob("1.0.0", []string{"1.0.0", "1.1.0"}, mustSemVerPolicy(">=0.0.0"), nil, &fakeRegistryClient{
+		digestByTag: map[string]string{
+			"1.0.0": "sha256:1",
+			"1.1.0": "sha256:2",
+		},
+		createdByTag: map[string]time.Time{
+			"1.1.0": time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+	})
+
+	job.Run()
+
+	if len(fp.submitted) != 1 {
+		t.Fatalf("submitted = %d, want 1", len(fp.submitted))
+	}
+	if fp.submitted[0].Repository.Tag != "1.1.0" {
+		t.Fatalf("tag = %s, want 1.1.0", fp.submitted[0].Repository.Tag)
+	}
+	frc := job.registryClient.(*fakeRegistryClient)
+	if len(frc.createdCalls) != 0 {
+		t.Fatalf("created time calls = %#v, want none", frc.createdCalls)
+	}
+}
+
+func forceJob(currentTag string, availableTags []string, filter policy.Filter, frc *fakeRegistryClient, cache *createdTimeCache) (*fakeProvider, *WatchRepositoryTagsJob, *types.TrackedImage) {
+	return tagsJobWithCache(currentTag, availableTags, policy.NewForce(), filter, frc, cache)
+}
+
+func tagsJob(currentTag string, availableTags []string, plc policy.Policy, filter policy.Filter, frc *fakeRegistryClient) (*fakeProvider, *WatchRepositoryTagsJob) {
+	fp, job, _ := tagsJobWithCache(currentTag, availableTags, plc, filter, frc, newCreatedTimeCache())
+	return fp, job
+}
+
+func tagsJobWithCache(currentTag string, availableTags []string, plc policy.Policy, filter policy.Filter, frc *fakeRegistryClient, cache *createdTimeCache) (*fakeProvider, *WatchRepositoryTagsJob, *types.TrackedImage) {
+	reference, _ := image.Parse("foo/bar:" + currentTag)
+	tracked := &types.TrackedImage{
+		Image:  reference,
+		Policy: plc,
+		Filter: filter,
+	}
+	fp := &fakeProvider{images: []*types.TrackedImage{tracked}}
+	if frc.tagsToReturn == nil {
+		frc.tagsToReturn = availableTags
+	}
+	job := NewWatchRepositoryTagsJob(provider.New([]provider.Provider{fp}), frc, &watchDetails{trackedImage: tracked}, cache)
+	return fp, job, tracked
+}
+
+func countString(items []string, want string) int {
+	count := 0
+	for _, item := range items {
+		if item == want {
+			count++
+		}
+	}
+	return count
 }
 
 type testingCredsHelper struct {

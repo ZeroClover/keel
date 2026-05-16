@@ -56,7 +56,7 @@ Keel is a **Kubernetes deployment automation tool** written in Go. It watches co
 | `trigger/` | **Event sources** - Detect new image versions | `poll/`, `pubsub/` |
 | `pkg/http/` | **HTTP server + webhooks** - REST API, registry webhooks | `http.go`, `*_webhook_trigger.go` |
 | `types/` | **Domain types** - Core data structures | `types.go` |
-| `internal/policy/` | **Version matching** - Semver, glob, force, regexp | `policy.go`, `semver.go` |
+| `internal/policy/` | **Version matching** - Semver, alphabetical, numerical, force | `policy.go`, `semver.go` |
 | `extension/` | **Plugins** - Notifications, credentials helpers | `notification/`, `credentialshelper/` |
 | `registry/` | **Registry client** - Docker registry API | `registry.go` |
 | `secrets/` | **K8s secrets** - Extract registry credentials | `secrets.go` |
@@ -103,9 +103,11 @@ type Event struct {
 ```
 
 **Available triggers:**
-- `trigger/poll/` - Periodically polls registries for new tags
-- `trigger/pubsub/` - Google Cloud Pub/Sub for GCR events
+- `trigger/poll/` - Periodically polls registries for new tags with `WatchRepositoryTagsJob`
+- `trigger/pubsub/` - Google Cloud Pub/Sub for GCR events; emits `TriggerName: "pubsub"`
 - `pkg/http/*_webhook_trigger.go` - Webhooks from DockerHub, Azure, GitHub, Harbor, Quay, JFrog
+
+Only poll events are trusted as policy-selected updates. PubSub, webhooks, empty trigger names, and unknown trigger names are treated as external candidates and must pass the resource's policy and filter before a provider updates anything.
 
 ### 3. Policies
 
@@ -117,7 +119,7 @@ type PolicyType int
 const (
     PolicyTypeNone PolicyType = iota
     PolicyTypeSemver       // semver:<constraint>
-    PolicyTypeForce        // select first supplied candidate
+    PolicyTypeForce        // poll sorts by image created time, then selects first candidate
     PolicyTypeAlphabetical // alphabetical[:asc|desc]
     PolicyTypeNumerical    // numerical[:asc|desc]
 )
@@ -128,7 +130,7 @@ const (
 - `keel.sh/policy: "semver:>=1.0.0-0"` - highest tag including pre-releases
 - `keel.sh/policy: "alphabetical:desc"` - lexicographically highest matching tag
 - `keel.sh/policy: "numerical:desc"` with `keel.sh/filterTags` and `keel.sh/extract` - highest extracted number
-- `keel.sh/policy: "force"` - first supplied candidate
+- `keel.sh/policy: "force"` - newest tag by image config `created` time when polling; explicit event tag for webhooks/pubsub after filter admission
 
 ### 4. Notifications
 
@@ -150,7 +152,7 @@ _ "github.com/keel-hq/keel/extension/notification/slack"
 
 1. **Trigger detects new version** → Creates `types.Event`
 2. **Event submitted to Providers** → `provider.Submit(event)`
-3. **Provider checks policies** → `internal/policy/` evaluates if update allowed
+3. **Provider checks policies** → poll events are already selected; external events are admitted through `internal/policy/`
 4. **Deployment updated** → Provider patches K8s resource or Helm release
 5. **Notifications sent** → Slack/webhook/etc. notified of update
 

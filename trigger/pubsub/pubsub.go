@@ -190,7 +190,8 @@ func (s *PubsubSubscriber) callback(ctx context.Context, msg *pubsub.Message) {
 			Tag:    ref.Tag(),
 			Digest: decoded.Digest,
 		},
-		CreatedAt: time.Now(),
+		CreatedAt:   time.Now(),
+		TriggerName: "pubsub",
 	}
 
 	s.providers.Submit(event)

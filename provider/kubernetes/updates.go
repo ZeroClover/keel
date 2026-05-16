@@ -12,7 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Repository, resource *k8s.GenericResource) (updatePlan *UpdatePlan, shouldUpdateDeployment bool, err error) {
+func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Repository, triggerName string, resource *k8s.GenericResource) (updatePlan *UpdatePlan, shouldUpdateDeployment bool, err error) {
 	updatePlan = &UpdatePlan{}
 
 	eventRepoRef, err := image.Parse(repo.String())
@@ -24,7 +24,7 @@ func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Reposit
 		"name":      resource.Name,
 		"namespace": resource.Namespace,
 		"kind":      resource.Kind(),
-		"policy":    plc.Name(),
+		"policy":    policyName(plc),
 	}).Debug("provider.kubernetes.checkVersionedDeployment: keel policy found, checking resource...")
 	shouldUpdateDeployment = false
 
@@ -51,7 +51,7 @@ func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Reposit
 				"parsed_image_name": containerImageRef.Remote(),
 				"target_image_name": repo.Name,
 				"target_tag":        repo.Tag,
-				"policy":            plc.Name(),
+				"policy":            policyName(plc),
 				"image":             c.Image,
 			}).Debug("provider.kubernetes: checking image")
 
@@ -63,13 +63,17 @@ func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Reposit
 				continue
 			}
 
-			shouldUpdateContainer, err := policy.AllowsTag(plc, filter, containerImageRef.Tag(), eventRepoRef.Tag())
+			if containerImageRef.Tag() == eventRepoRef.Tag() {
+				continue
+			}
+
+			shouldUpdateContainer, err := shouldUpdateFromEvent(plc, filter, containerImageRef.Tag(), eventRepoRef.Tag(), triggerName)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"error":             err,
 					"parsed_image_name": containerImageRef.Remote(),
 					"target_image_name": repo.Name,
-					"policy":            plc.Name(),
+					"policy":            policyName(plc),
 				}).Error("provider.kubernetes: failed to check whether init container should be updated")
 				continue
 			}
@@ -115,7 +119,7 @@ func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Reposit
 			"parsed_image_name": containerImageRef.Remote(),
 			"target_image_name": repo.Name,
 			"target_tag":        repo.Tag,
-			"policy":            plc.Name(),
+			"policy":            policyName(plc),
 			"image":             c.Image,
 		}).Debug("provider.kubernetes: checking image")
 
@@ -127,13 +131,17 @@ func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Reposit
 			continue
 		}
 
-		shouldUpdateContainer, err := policy.AllowsTag(plc, filter, containerImageRef.Tag(), eventRepoRef.Tag())
+		if containerImageRef.Tag() == eventRepoRef.Tag() {
+			continue
+		}
+
+		shouldUpdateContainer, err := shouldUpdateFromEvent(plc, filter, containerImageRef.Tag(), eventRepoRef.Tag(), triggerName)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error":             err,
 				"parsed_image_name": containerImageRef.Remote(),
 				"target_image_name": repo.Name,
-				"policy":            plc.Name(),
+				"policy":            policyName(plc),
 			}).Error("provider.kubernetes: failed to check whether container should be updated")
 			continue
 		}
@@ -160,6 +168,20 @@ func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Reposit
 	}
 
 	return updatePlan, shouldUpdateDeployment, nil
+}
+
+func policyName(plc policy.Policy) string {
+	if plc == nil {
+		return ""
+	}
+	return plc.Name()
+}
+
+func shouldUpdateFromEvent(plc policy.Policy, filter policy.Filter, currentTag, eventTag, triggerName string) (bool, error) {
+	if triggerName == types.TriggerTypePoll.String() {
+		return true, nil
+	}
+	return policy.AllowsTag(plc, filter, currentTag, eventTag)
 }
 
 func setUpdateTime(resource *k8s.GenericResource) {

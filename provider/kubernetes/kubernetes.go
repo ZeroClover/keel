@@ -311,7 +311,7 @@ func (p *Provider) startInternal() error {
 }
 
 func (p *Provider) processEvent(event *types.Event) (updated []*k8s.GenericResource, err error) {
-	plans, err := p.createUpdatePlans(&event.Repository)
+	plans, err := p.createUpdatePlans(event)
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +467,7 @@ func getDesiredImage(delta map[string]string, currentImage string) (string, erro
 }
 
 // createUpdatePlans - impacted deployments by changed repository
-func (p *Provider) createUpdatePlans(repo *types.Repository) ([]*UpdatePlan, error) {
+func (p *Provider) createUpdatePlans(event *types.Event) ([]*UpdatePlan, error) {
 	impacted := []*UpdatePlan{}
 
 	for _, resource := range p.cache.Values() {
@@ -489,7 +489,7 @@ func (p *Provider) createUpdatePlans(repo *types.Repository) ([]*UpdatePlan, err
 			continue
 		}
 
-		updated, shouldUpdateDeployment, err := checkForUpdate(plc, filter, repo, resource)
+		updated, shouldUpdateDeployment, err := checkForUpdate(plc, filter, &event.Repository, event.TriggerName, resource)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error":      err,

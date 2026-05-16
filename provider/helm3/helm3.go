@@ -276,7 +276,7 @@ func (p *Provider) createUpdatePlans(event *types.Event) ([]*UpdatePlan, error) 
 
 	for _, release := range releases {
 
-		plan, update, err := checkRelease(&event.Repository, release.Namespace, release.Name, release.Chart, release.Config)
+		plan, update, err := checkRelease(&event.Repository, event.TriggerName, release.Namespace, release.Name, release.Chart, release.Config)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error":     err,

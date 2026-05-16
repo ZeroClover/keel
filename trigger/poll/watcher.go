@@ -65,7 +65,8 @@ type RepositoryWatcher struct {
 	// map[registry/name]=image.Reference
 	watched map[string]*watchDetails
 
-	cron *cron.Cron
+	cron             *cron.Cron
+	createdTimeCache *createdTimeCache
 }
 
 // NewRepositoryWatcher - create new repository watcher
@@ -73,10 +74,11 @@ func NewRepositoryWatcher(providers provider.Providers, registryClient registry.
 	c := cron.New()
 
 	return &RepositoryWatcher{
-		providers:      providers,
-		registryClient: registryClient,
-		watched:        make(map[string]*watchDetails),
-		cron:           c,
+		providers:        providers,
+		registryClient:   registryClient,
+		watched:          make(map[string]*watchDetails),
+		cron:             c,
+		createdTimeCache: newCreatedTimeCache(),
 	}
 }
 
@@ -248,7 +250,7 @@ func (w *RepositoryWatcher) addJob(ti *types.TrackedImage, schedule string) erro
 	w.watched[key] = details
 
 	// adding new job
-	job := NewWatchRepositoryTagsJob(w.providers, w.registryClient, details)
+	job := NewWatchRepositoryTagsJob(w.providers, w.registryClient, details, w.createdTimeCache)
 	log.WithFields(log.Fields{
 		"job_name": key,
 		"image":    ti.Image.Registry() + "/" + ti.Image.ShortName(), // A watcher can be shared, so it makes little sense to specify tag depth here

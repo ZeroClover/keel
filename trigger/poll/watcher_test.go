@@ -3,10 +3,9 @@ package poll
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
+	"time"
 
-	// "github.com/keel-hq/keel/cache/memory"
 	"github.com/keel-hq/keel/extension/credentialshelper"
 	"github.com/keel-hq/keel/internal/policy"
 	"github.com/keel-hq/keel/provider"
@@ -44,31 +43,47 @@ func mustRegexFilter(pattern, replace string) *policy.RegexFilter {
 	return filter
 }
 
-// ======== fake registry client for testing =======
 type fakeRegistryClient struct {
-	opts registry.Opts // opts set if anything called Digest(opts Opts)
+	opts registry.Opts
 
-	digestToReturn string
-
+	digestToReturn    string
 	digestErrToReturn error
+	digestByTag       map[string]string
 
 	tagsToReturn []string
+
+	createdByTag map[string]time.Time
+	createdErr   map[string]error
+	createdCalls []string
 }
 
 func (c *fakeRegistryClient) Get(opts registry.Opts) (*registry.Repository, error) {
 	c.opts = opts
-	return &registry.Repository{
-		Name: opts.Name,
-		Tags: c.tagsToReturn,
-	}, nil
+	return &registry.Repository{Name: opts.Name, Tags: c.tagsToReturn}, nil
 }
 
-func (c *fakeRegistryClient) Digest(opts registry.Opts) (digest string, err error) {
+func (c *fakeRegistryClient) Digest(opts registry.Opts) (string, error) {
 	c.opts = opts
-	return c.digestToReturn, c.digestErrToReturn
+	if c.digestErrToReturn != nil {
+		return "", c.digestErrToReturn
+	}
+	if digest, ok := c.digestByTag[opts.Tag]; ok {
+		return digest, nil
+	}
+	if c.digestToReturn != "" {
+		return c.digestToReturn, nil
+	}
+	return "sha256:" + opts.Tag, nil
 }
 
-// ======== fake provider for testing =======
+func (c *fakeRegistryClient) GetCreatedTime(opts registry.Opts) (time.Time, error) {
+	c.createdCalls = append(c.createdCalls, opts.Tag)
+	if err, ok := c.createdErr[opts.Tag]; ok {
+		return time.Time{}, err
+	}
+	return c.createdByTag[opts.Tag], nil
+}
+
 type fakeProvider struct {
 	submitted []types.Event
 	images    []*types.TrackedImage
@@ -82,295 +97,77 @@ func (p *fakeProvider) Submit(event types.Event) error {
 func (p *fakeProvider) GetName() string {
 	return "fakeProvider"
 }
-func (p *fakeProvider) Stop() {
-	return
-}
+func (p *fakeProvider) Stop() {}
 func (p *fakeProvider) TrackedImages() ([]*types.TrackedImage, error) {
 	return p.images, nil
 }
 
-func TestWatchTagJob(t *testing.T) {
-
-	fp := &fakeProvider{}
-	providers := provider.New([]provider.Provider{fp})
-
-	frc := &fakeRegistryClient{
-		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
-	}
-
-	reference, _ := image.Parse("foo/bar:1.1")
-
-	details := &watchDetails{
-		trackedImage: &types.TrackedImage{
-			Image: reference,
-		},
-		digest: "sha256:123123123",
-	}
-
-	job := NewWatchTagJob(providers, frc, details)
-
-	job.Run()
-
-	// checking whether new job was submitted
-
-	submitted := fp.submitted[0]
-
-	if submitted.Repository.Name != "index.docker.io/foo/bar" {
-		t.Errorf("unexpected event repository name: %s", submitted.Repository.Name)
-	}
-
-	if submitted.Repository.Tag != "1.1" {
-		t.Errorf("unexpected event repository tag: %s", submitted.Repository.Tag)
-	}
-
-	if submitted.Repository.Digest != frc.digestToReturn {
-		t.Errorf("unexpected event repository digest: %s", submitted.Repository.Digest)
-	}
-
-	// digest should be updated
-
-	if job.details.digest != frc.digestToReturn {
-		t.Errorf("job details digest wasn't updated")
-	}
-}
-
-func TestWatchTagJobForce(t *testing.T) {
-
-	img, _ := image.Parse("gcr.io/v2-namespace/hello-world:1.1.1")
-	fp := &fakeProvider{
-		images: []*types.TrackedImage{
-			{
-				Image:        img,
-				Trigger:      types.TriggerTypePoll,
-				Provider:     "fp",
-				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewForce(),
-			},
-		},
-	}
-	providers := provider.New([]provider.Provider{fp})
-
-	frc := &fakeRegistryClient{
-		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
-		tagsToReturn:   []string{"1.1.2", "1.2.0"},
-	}
-
-	watcher := NewRepositoryWatcher(providers, frc)
-
-	err := watcher.Watch(fp.images...)
-
+func TestGetImageIdentifierDropsTag(t *testing.T) {
+	ref, err := image.Parse("docker.io/library/nginx:1.25")
 	if err != nil {
-		t.Errorf("expected to find watching %s", img.Remote())
+		t.Fatal(err)
 	}
-
-	if dig, ok := watcher.watched["gcr.io/v2-namespace/hello-world"]; ok {
-		if dig.latest != "1.1.1" {
-			t.Errorf("unexpected event repository tag: %s", dig.latest)
-		}
-	} else {
-		t.Errorf("hello-world watcher not found")
+	got := getImageIdentifier(ref)
+	if got != "index.docker.io/library/nginx" {
+		t.Fatalf("identifier = %q", got)
 	}
 }
 
-func TestWatchTagJobLatest(t *testing.T) {
-
-	fp := &fakeProvider{}
-	providers := provider.New([]provider.Provider{fp})
-
-	frc := &fakeRegistryClient{
-		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
-	}
-
-	reference, _ := image.Parse("foo/bar:latest")
-
-	details := &watchDetails{
-		trackedImage: &types.TrackedImage{
-			Image: reference,
-		},
-		digest: "sha256:123123123",
-	}
-
-	job := NewWatchTagJob(providers, frc, details)
-
-	job.Run()
-
-	// checking whether new job was submitted
-
-	submitted := fp.submitted[0]
-
-	if submitted.Repository.Name != "index.docker.io/foo/bar" {
-		t.Errorf("unexpected event repository name: %s", submitted.Repository.Name)
-	}
-
-	if submitted.Repository.Tag != "latest" {
-		t.Errorf("unexpected event repository tag: %s", submitted.Repository.Tag)
-	}
-
-	if submitted.Repository.Digest != frc.digestToReturn {
-		t.Errorf("unexpected event repository digest: %s", submitted.Repository.Digest)
-	}
-
-	// digest should be updated
-
-	if job.details.digest != frc.digestToReturn {
-		t.Errorf("job details digest wasn't updated")
-	}
-}
-
-func TestWatchAllTagsJob(t *testing.T) {
-
+func TestWatchRepositoryTagsJob(t *testing.T) {
 	reference, _ := image.Parse("foo/bar:1.1.0")
 	fp := &fakeProvider{
-		images: []*types.TrackedImage{
-			{
-				Image:  reference,
-				Policy: mustSemVerPolicy(">=0.0.0-0"),
-			},
-		},
+		images: []*types.TrackedImage{{Image: reference, Policy: mustSemVerPolicy(">=0.0.0-0")}},
 	}
 	providers := provider.New([]provider.Provider{fp})
+	frc := &fakeRegistryClient{tagsToReturn: []string{"1.1.2", "1.1.3", "0.9.1"}}
+	details := &watchDetails{trackedImage: fp.images[0]}
 
-	frc := &fakeRegistryClient{
-		tagsToReturn: []string{"1.1.2", "1.1.3", "0.9.1"},
-	}
-
-	details := &watchDetails{
-		trackedImage: fp.images[0],
-	}
-
-	job := NewWatchRepositoryTagsJob(providers, frc, details)
-
-	job.Run()
-
-	// checking whether new job was submitted
-
-	submitted := fp.submitted[0]
-
-	if submitted.Repository.Name != "index.docker.io/foo/bar" {
-		t.Errorf("unexpected event repository name: %s", submitted.Repository.Name)
-	}
-
-	if submitted.Repository.Tag != "1.1.3" {
-		t.Errorf("expected event repository tag 1.1.3, but got: %s", submitted.Repository.Tag)
-	}
-}
-
-func TestWatchAllTagsJobCurrentLatest(t *testing.T) {
-
-	reference, _ := image.Parse("foo/bar:latest")
-	fp := &fakeProvider{
-		images: []*types.TrackedImage{
-			{
-				Image:  reference,
-				Policy: policy.NewForce(),
-			},
-		},
-	}
-	providers := provider.New([]provider.Provider{fp})
-
-	frc := &fakeRegistryClient{
-		tagsToReturn: []string{"1.1.2", "1.1.3", "0.9.1"},
-	}
-
-	details := &watchDetails{
-		trackedImage: fp.images[0],
-	}
-
-	job := NewWatchRepositoryTagsJob(providers, frc, details)
-
+	job := NewWatchRepositoryTagsJob(providers, frc, details, newCreatedTimeCache())
 	job.Run()
 
 	if len(fp.submitted) != 1 {
-		t.Fatalf("expected 1 submitted event, got: %d", len(fp.submitted))
+		t.Fatalf("submitted = %d, want 1", len(fp.submitted))
 	}
-	if fp.submitted[0].Repository.Tag != "1.1.2" {
-		t.Errorf("unexpected event repository tag: %s", fp.submitted[0].Repository.Tag)
+	if fp.submitted[0].Repository.Name != "index.docker.io/foo/bar" {
+		t.Fatalf("repository = %s", fp.submitted[0].Repository.Name)
+	}
+	if fp.submitted[0].Repository.Tag != "1.1.3" {
+		t.Fatalf("tag = %s", fp.submitted[0].Repository.Tag)
 	}
 }
 
-func TestWatchMultipleTags(t *testing.T) {
-	// fake provider listening for events
+func TestWatchMultipleRepositories(t *testing.T) {
 	imgA, _ := image.Parse("gcr.io/v2-namespace/hello-world:1.1.1")
 	imgB, _ := image.Parse("gcr.io/v2-namespace/greetings-world:1.1.1")
 	imgC, _ := image.Parse("gcr.io/v2-namespace/greetings-world:alpha")
-	imgD, _ := image.Parse("gcr.io/v2-namespace/greetings-world:master")
-	fp := &fakeProvider{
-		images: []*types.TrackedImage{
-
-			{
-				Image:        imgA,
-				Trigger:      types.TriggerTypePoll,
-				Provider:     "fp",
-				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       mustSemVerPolicy(">=0.0.0-0"),
-			},
-
-			{
-				Trigger:      types.TriggerTypePoll,
-				Image:        imgB,
-				Provider:     "fp",
-				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       mustSemVerPolicy(">=0.0.0-0"),
-			},
-
-			{
-				Trigger:      types.TriggerTypePoll,
-				Image:        imgC,
-				Provider:     "fp",
-				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewForce(),
-			},
-
-			{
-				Trigger:      types.TriggerTypePoll,
-				Image:        imgD,
-				Provider:     "fp",
-				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewForce(),
-			},
-		},
-	}
+	fp := &fakeProvider{images: []*types.TrackedImage{
+		{Image: imgA, Trigger: types.TriggerTypePoll, PollSchedule: types.KeelPollDefaultSchedule, Policy: mustSemVerPolicy(">=0.0.0-0")},
+		{Image: imgB, Trigger: types.TriggerTypePoll, PollSchedule: types.KeelPollDefaultSchedule, Policy: mustSemVerPolicy(">=0.0.0-0")},
+		{Image: imgC, Trigger: types.TriggerTypePoll, PollSchedule: types.KeelPollDefaultSchedule, Policy: policy.NewForce()},
+	}}
 	providers := provider.New([]provider.Provider{fp})
-
-	// returning some sha
 	frc := &fakeRegistryClient{
 		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
 		tagsToReturn:   []string{"5.0.0"},
 	}
-
 	watcher := NewRepositoryWatcher(providers, frc)
 
-	tracked := []*types.TrackedImage{
-		mustParse("gcr.io/v2-namespace/hello-world:1.1.1", "@every 10m"),
-		mustParse("gcr.io/v2-namespace/greetings-world:1.1.1", "@every 10m"),
-		mustParse("gcr.io/v2-namespace/greetings-world:alpha", "@every 10m"),
-		mustParse("gcr.io/v2-namespace/greetings-world:master", "@every 10m"),
+	err := watcher.Watch(fp.images...)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	watcher.Watch(tracked...)
-
 	if len(watcher.watched) != 2 {
-		t.Errorf("expected to find watching 2 entries, found: %d", len(watcher.watched))
+		t.Fatalf("watched = %d, want 2", len(watcher.watched))
 	}
-
-	if det, ok := watcher.watched["gcr.io/v2-namespace/greetings-world"]; ok != true {
-		t.Errorf("watcher not found")
-		if det.latest != "5.0.0" {
-			t.Errorf("expected to find a tag set for multiple tags watch job")
-		}
+	if _, ok := watcher.watched["gcr.io/v2-namespace/greetings-world"]; !ok {
+		t.Fatal("greetings-world watcher not found")
 	}
 }
 
 type fakeCredentialsHelper struct {
-
-	// set by the caller
 	getImageRequest *types.TrackedImage
-
-	// credentials to return
-	creds *types.Credentials
-
-	// error to return
-	error error
+	creds           *types.Credentials
+	error           error
 }
 
 func (fch *fakeCredentialsHelper) GetCredentials(image *types.TrackedImage) (*types.Credentials, error) {
@@ -380,145 +177,50 @@ func (fch *fakeCredentialsHelper) GetCredentials(image *types.TrackedImage) (*ty
 
 func (fch *fakeCredentialsHelper) IsEnabled() bool { return true }
 
-func TestWatchTagJobCheckCredentials(t *testing.T) {
-
-	fakeHelper := &fakeCredentialsHelper{
-		creds: &types.Credentials{
-			Username: "user-xx",
-			Password: "pass-xx",
-		},
-	}
-
+func TestWatchRepositoryJobCheckCredentials(t *testing.T) {
+	fakeHelper := &fakeCredentialsHelper{creds: &types.Credentials{Username: "user-xx", Password: "pass-xx"}}
 	credentialshelper.RegisterCredentialsHelper("fake", fakeHelper)
 	defer credentialshelper.UnregisterCredentialsHelper("fake")
 
-	fp := &fakeProvider{}
+	ref, _ := image.Parse("foo/bar:1.1")
+	fp := &fakeProvider{images: []*types.TrackedImage{{Image: ref, Trigger: types.TriggerTypePoll, PollSchedule: "@every 10m", Policy: mustSemVerPolicy(">=0.0.0-0")}}}
 	providers := provider.New([]provider.Provider{fp})
+	frc := &fakeRegistryClient{digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb"}
+	watcher := NewRepositoryWatcher(providers, frc)
 
-	frc := &fakeRegistryClient{
-		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
+	err := watcher.Watch(fp.images...)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	reference, _ := image.Parse("foo/bar:1.1")
-
-	details := &watchDetails{
-		trackedImage: &types.TrackedImage{
-			Image: reference,
-		},
-		digest: "sha256:123123123",
-	}
-
-	job := NewWatchTagJob(providers, frc, details)
-
-	job.Run()
-
-	// checking whether new job was submitted
-
-	if frc.opts.Password != "pass-xx" {
-		t.Errorf("unexpected password for registry: %s", frc.opts.Password)
-	}
-
-	if frc.opts.Username != "user-xx" {
-		t.Errorf("unexpected username for registry: %s", frc.opts.Username)
+	if frc.opts.Password != "pass-xx" || frc.opts.Username != "user-xx" {
+		t.Fatalf("registry credentials = %s/%s", frc.opts.Username, frc.opts.Password)
 	}
 }
 
 func TestWatchWithAuthenticationError(t *testing.T) {
-
-	fakeHelper := &fakeCredentialsHelper{
-		creds: nil,
-		error: errors.New("no credentials found"),
-	}
-
+	fakeHelper := &fakeCredentialsHelper{error: errors.New("no credentials found")}
 	credentialshelper.RegisterCredentialsHelper("fake", fakeHelper)
 	defer credentialshelper.UnregisterCredentialsHelper("fake")
 
 	fp := &fakeProvider{}
 	providers := provider.New([]provider.Provider{fp})
-
-	frc := &fakeRegistryClient{
-		digestErrToReturn: errors.New("authentication failed"),
-	}
-
+	frc := &fakeRegistryClient{digestErrToReturn: errors.New("authentication failed")}
 	watcher := NewRepositoryWatcher(providers, frc)
-
-	tracked := []*types.TrackedImage{
-		mustParse("private.registry.com/v2-namespace/hello-world:1.1.1", "@every 10m"),
-	}
+	tracked := []*types.TrackedImage{mustParse("private.registry.com/v2-namespace/hello-world:1.1.1", "@every 10m")}
 
 	err := watcher.Watch(tracked...)
-
 	if err == nil {
-		t.Fatalf("expected error with faild authentication, but got nil")
-	}
-}
-
-func TestWatchTagJobLatestECR(t *testing.T) {
-	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
-		t.Skip()
-	}
-
-	imgA, _ := image.Parse("528670773427.dkr.ecr.us-east-2.amazonaws.com/webhook-demo:master")
-	fp := &fakeProvider{
-		images: []*types.TrackedImage{
-			{
-				Image:        imgA,
-				Trigger:      types.TriggerTypePoll,
-				Provider:     "fp",
-				PollSchedule: types.KeelPollDefaultSchedule,
-			},
-		},
-	}
-
-	providers := provider.New([]provider.Provider{fp})
-	rc := registry.New()
-
-	details := &watchDetails{
-		trackedImage: &types.TrackedImage{
-			Image: imgA,
-		},
-		digest: "sha256:123123123",
-	}
-
-	job := NewWatchTagJob(providers, rc, details)
-
-	for i := 0; i < 5; i++ {
-		job.Run()
-	}
-
-	// checking whether new job was submitted
-
-	submitted := fp.submitted[0]
-
-	if submitted.Repository.Name != "528670773427.dkr.ecr.us-east-2.amazonaws.com/webhook-demo" {
-		t.Errorf("unexpected event repository name: %s", submitted.Repository.Name)
-	}
-
-	if submitted.Repository.Tag != "master" {
-		t.Errorf("unexpected event repository tag: %s", submitted.Repository.Tag)
-	}
-
-	if submitted.Repository.Digest != "sha256:7712aa425c17c2e413e5f4d64e2761eda009509d05d0e45a26e389d715aebe23" {
-		t.Errorf("unexpected event repository digest: %s", submitted.Repository.Digest)
-	}
-
-	// digest should be updated
-
-	if job.details.digest != "sha256:7712aa425c17c2e413e5f4d64e2761eda009509d05d0e45a26e389d715aebe23" {
-		t.Errorf("job details digest wasn't updated")
+		t.Fatal("expected authentication error")
 	}
 }
 
 func TestUnwatchAfterNotTrackedAnymore(t *testing.T) {
 	fp := &fakeProvider{}
 	providers := provider.New([]provider.Provider{fp})
-
-	// returning some sha
 	frc := &fakeRegistryClient{
 		digestToReturn: "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb",
 		tagsToReturn:   []string{"5.0.0"},
 	}
-
 	watcher := NewRepositoryWatcher(providers, frc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -528,31 +230,17 @@ func TestUnwatchAfterNotTrackedAnymore(t *testing.T) {
 		mustParse("gcr.io/v2-namespace/hello-world:1.1.1", "@every 10m"),
 		mustParse("gcr.io/v2-namespace/greetings-world:1.1.1", "@every 10m"),
 		mustParse("gcr.io/v2-namespace/greetings-world:alpha", "@every 10m"),
-		mustParse("gcr.io/v2-namespace/greetings-world:master", "@every 10m"),
 	}
-
 	watcher.Watch(tracked...)
-
 	if len(watcher.watched) != 2 {
-		t.Errorf("expected to find watching 2 entries, found: %d", len(watcher.watched))
-	}
-
-	if det, ok := watcher.watched["gcr.io/v2-namespace/greetings-world"]; ok != true {
-		t.Errorf("alpha watcher not found")
-		if det.latest != "5.0.0" {
-			t.Errorf("expected to find a tag set for multiple tags watch job")
-		}
+		t.Fatalf("watched = %d, want 2", len(watcher.watched))
 	}
 
 	trackedUpdated := []*types.TrackedImage{
 		mustParse("gcr.io/v2-namespace/hello-world:1.1.1", "@every 10m"),
-		mustParse("gcr.io/v2-namespace/greetings-world:1.1.1", "@every 10m"),
-		mustParse("gcr.io/v2-namespace/greetings-world:alpha", "@every 10m"),
 	}
-
 	watcher.Watch(trackedUpdated...)
-
-	if len(watcher.watched) != 2 {
-		t.Errorf("expected to find watching 2 entries, found: %d", len(watcher.watched))
+	if len(watcher.watched) != 1 {
+		t.Fatalf("watched = %d, want 1", len(watcher.watched))
 	}
 }

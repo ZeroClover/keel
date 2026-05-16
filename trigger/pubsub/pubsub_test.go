@@ -41,6 +41,9 @@ func TestCallback(t *testing.T) {
 	if fp.submitted[0].Repository.Tag != "1.1.1" {
 		t.Errorf("expected repo tag %s but got %s", "1.1.1", fp.submitted[0].Repository.Tag)
 	}
+	if fp.submitted[0].TriggerName != "pubsub" {
+		t.Errorf("expected trigger name %s but got %s", "pubsub", fp.submitted[0].TriggerName)
+	}
 
 }
 func TestCallbackTagNotSemver(t *testing.T) {
