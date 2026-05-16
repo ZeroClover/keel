@@ -1,156 +1,186 @@
 package policy
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
-	"github.com/keel-hq/keel/util/image"
-	"github.com/keel-hq/keel/util/version"
-
 	"github.com/keel-hq/keel/types"
+)
 
-	log "github.com/sirupsen/logrus"
+const (
+	legacyPolicyLabel               = "keel.observer/policy"
+	legacyForceTagMatchLabel        = "keel.sh/matchTag"
+	legacyForceTagMatchLegacyLabel  = "keel.sh/match-tag"
+	legacyMatchPreReleaseAnnotation = "keel.sh/matchPreRelease"
+)
+
+var (
+	errUnsupportedPolicy = errors.New("unsupported legacy policy configuration")
+	errEmpty             = errors.New("candidate list cannot be empty")
+	errNoMatch           = errors.New("unable to determine latest candidate from provided list")
 )
 
 type Policy interface {
-	ShouldUpdate(current, new string) (bool, error)
 	Name() string
 	Type() types.PolicyType
-	Filter(tags []string) []string
-	KeepTag() bool
+	Latest(candidates []string) (string, error)
 }
 
-type NilPolicy struct{}
+type Filter interface {
+	Apply(tags []string)
+	Items() []string
+	GetOriginalTag(key string) string
+}
 
-func (np *NilPolicy) ShouldUpdate(c, n string) (bool, error) { return false, nil }
-func (np *NilPolicy) Name() string                           { return "nil policy" }
-func (np *NilPolicy) Type() types.PolicyType                 { return types.PolicyTypeNone }
-func (np *NilPolicy) Filter(tags []string) []string          { return append([]string{}, tags...) }
-func (np *NilPolicy) KeepTag() bool                          { return false }
-
-// GetPolicyFromLabelsOrAnnotations - gets policy from k8s labels or annotations
-func GetPolicyFromLabelsOrAnnotations(labels map[string]string, annotations map[string]string) Policy {
-
-	policyNameA, ok := getPolicyFromLabels(annotations)
-	if ok {
-		return GetPolicy(policyNameA, &Options{MatchTag: getMatchTag(annotations), MatchPreRelease: getMatchPreRelease(annotations)})
+// GetPolicyFromLabelsOrAnnotations gets policy and filter configuration from Kubernetes metadata.
+func GetPolicyFromLabelsOrAnnotations(labels map[string]string, annotations map[string]string) (Policy, Filter, error) {
+	if legacyKey, ok := findLegacyPolicyKey(labels, annotations); ok {
+		return nil, nil, unsupportedPolicyError("legacy policy key %q is no longer supported; use %q with semver/alphabetical/numerical/force syntax", legacyKey, types.KeelPolicyLabel)
+	}
+	if legacyKey, ok := findLegacyMatchKey(labels, annotations); ok {
+		return nil, nil, unsupportedPolicyError("legacy annotation %q is no longer supported; use %q and %q instead", legacyKey, types.KeelFilterTagsAnnotation, types.KeelExtractAnnotation)
 	}
 
-	policyNameL, ok := getPolicyFromLabels(labels)
-	if !ok {
-		return &NilPolicy{}
+	policyName := readPreferredValue(labels, annotations, types.KeelPolicyLabel)
+	policyName = strings.TrimSpace(policyName)
+	if policyName == "" || policyName == "never" {
+		return nil, nil, nil
 	}
 
-	return GetPolicy(policyNameL, &Options{MatchTag: getMatchTag(labels), MatchPreRelease: getMatchPreRelease(labels)})
+	plc, err := parsePolicy(policyName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var filter Filter
+	filterTags := readPreferredValue(labels, annotations, types.KeelFilterTagsAnnotation)
+	if filterTags != "" {
+		filter, err = NewRegexFilter(filterTags, readPreferredValue(labels, annotations, types.KeelExtractAnnotation))
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return plc, filter, nil
 }
 
-// Options - additional options when parsing policy
-type Options struct {
-	MatchTag        bool
-	MatchPreRelease bool
+func AllowsTag(plc types.Policy, filter types.Filter, currentTag, eventTag string) (bool, error) {
+	if plc == nil || eventTag == "" {
+		return false, nil
+	}
+
+	if plc.Type() == types.PolicyTypeForce {
+		if filter == nil {
+			return true, nil
+		}
+		filter.Apply([]string{eventTag})
+		return len(filter.Items()) > 0, nil
+	}
+
+	candidates := []string{currentTag, eventTag}
+	eventKey := eventTag
+	if filter != nil {
+		filter.Apply(candidates)
+		candidates = filter.Items()
+		foundEvent := false
+		for _, key := range candidates {
+			if filter.GetOriginalTag(key) == eventTag {
+				eventKey = key
+				foundEvent = true
+				break
+			}
+		}
+		if !foundEvent {
+			return false, nil
+		}
+	}
+
+	latestKey, err := plc.Latest(candidates)
+	if err != nil {
+		return false, err
+	}
+
+	if filter != nil {
+		return filter.GetOriginalTag(latestKey) == eventTag, nil
+	}
+	return latestKey == eventKey, nil
 }
 
-// GetPolicy - policy getter used by Helm config
-func GetPolicy(policyName string, options *Options) Policy {
+func parsePolicy(policyName string) (Policy, error) {
+	lower := strings.ToLower(policyName)
+	if isLegacyPolicyValue(lower) {
+		return nil, unsupportedPolicyError("legacy policy value %q is no longer supported", policyName)
+	}
 
 	switch {
-	case strings.HasPrefix(policyName, "glob:"):
-		p, err := NewGlobPolicy(policyName)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error":  err,
-				"policy": policyName,
-			}).Error("failed to parse glob policy, check your deployment configuration")
-			return &NilPolicy{}
+	case strings.HasPrefix(policyName, "semver:"):
+		constraint := strings.TrimPrefix(policyName, "semver:")
+		if strings.TrimSpace(constraint) == "" {
+			return nil, fmt.Errorf("semver policy requires a constraint")
 		}
-		return p
-	case strings.HasPrefix(policyName, "regexp:"):
-		p, err := NewRegexpPolicy(policyName)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error":  err,
-				"policy": policyName,
-			}).Error("failed to parse regexp policy, check your deployment configuration")
-			return &NilPolicy{}
-		}
-		return p
+		return NewSemVer(constraint)
+	case lower == "force":
+		return NewForce(), nil
+	case lower == "alphabetical" || strings.HasPrefix(lower, "alphabetical:"):
+		return NewAlphabetical(policyOrder(lower, "alphabetical"))
+	case lower == "numerical" || strings.HasPrefix(lower, "numerical:"):
+		return NewNumerical(policyOrder(lower, "numerical"))
+	default:
+		return nil, fmt.Errorf("unsupported policy %q", policyName)
 	}
+}
 
+func policyOrder(policyName, prefix string) string {
+	prefix += ":"
+	if !strings.HasPrefix(policyName, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(policyName, prefix)
+}
+
+func readPreferredValue(labels map[string]string, annotations map[string]string, key string) string {
+	if value, ok := annotations[key]; ok {
+		return value
+	}
+	return labels[key]
+}
+
+func findLegacyPolicyKey(labels map[string]string, annotations map[string]string) (string, bool) {
+	if _, ok := annotations[types.KeelPolicyLabel]; ok {
+		return "", false
+	}
+	if _, ok := labels[types.KeelPolicyLabel]; ok {
+		return "", false
+	}
+	if _, ok := annotations[legacyPolicyLabel]; ok {
+		return legacyPolicyLabel, true
+	}
+	if _, ok := labels[legacyPolicyLabel]; ok {
+		return legacyPolicyLabel, true
+	}
+	return "", false
+}
+
+func findLegacyMatchKey(labels map[string]string, annotations map[string]string) (string, bool) {
+	for _, metadata := range []map[string]string{annotations, labels} {
+		for _, key := range []string{legacyForceTagMatchLabel, legacyForceTagMatchLegacyLabel, legacyMatchPreReleaseAnnotation} {
+			if _, ok := metadata[key]; ok {
+				return key, true
+			}
+		}
+	}
+	return "", false
+}
+
+func isLegacyPolicyValue(policyName string) bool {
 	switch policyName {
 	case "all", "major", "minor", "patch":
-		return ParseSemverPolicy(policyName, options.MatchPreRelease)
-	case "force":
-		return NewForcePolicy(options.MatchTag)
-	case "", "never":
-		return &NilPolicy{}
+		return true
 	}
-
-	log.Infof("policy.GetPolicy: unknown policy '%s', please check your configuration", policyName)
-
-	return &NilPolicy{}
+	return strings.HasPrefix(policyName, "glob:") || strings.HasPrefix(policyName, "regexp:")
 }
 
-// ParseSemverPolicy - parse policy type
-func ParseSemverPolicy(policy string, matchPreRelease bool) Policy {
-	switch policy {
-	case "all":
-		return NewSemverPolicy(SemverPolicyTypeAll, matchPreRelease)
-	case "major":
-		return NewSemverPolicy(SemverPolicyTypeMajor, matchPreRelease)
-	case "minor":
-		return NewSemverPolicy(SemverPolicyTypeMinor, matchPreRelease)
-	case "patch":
-		return NewSemverPolicy(SemverPolicyTypePatch, matchPreRelease)
-	// case "force":
-	// 	return PolicyTypeForce
-	default:
-		return &NilPolicy{}
-	}
-}
-
-func getPolicyFromLabels(labels map[string]string) (string, bool) {
-	policy, ok := labels[types.KeelPolicyLabel]
-	if ok {
-		return policy, true
-	}
-	legacy, ok := labels["keel.observer/policy"]
-	return legacy, ok
-}
-
-func getMatchTag(labels map[string]string) bool {
-	mt, ok := labels[types.KeelForceTagMatchLabel]
-	if ok {
-		return mt == "true"
-	}
-	legacyMt, ok := labels[types.KeelForceTagMatchLegacyLabel]
-	if ok {
-		return legacyMt == "true"
-	}
-
-	return false
-}
-
-func getMatchPreRelease(labels map[string]string) bool {
-	mt, ok := labels[types.KeelMatchPreReleaseAnnotation]
-	if ok {
-		return mt == "true"
-	}
-
-	// Default to true for backward compatibility
-	return true
-}
-
-// LegacyPolicyPopulate creates a policy based on the image tag
-func LegacyPolicyPopulate(ref *image.Reference) Policy {
-	_, err := version.GetVersion(ref.Tag())
-	var policy Policy
-	if err == nil {
-		policy = NewSemverPolicy(SemverPolicyTypeAll, true)
-	} else {
-		policy = NewForcePolicy(true)
-	}
-	log.WithFields(log.Fields{
-		"image":  ref.Name(),
-		"policy": policy.Type(),
-	}).Info("trigger.poll.watcher: image policy was not configured. Automatic policy was set.")
-	return policy
+func unsupportedPolicyError(format string, args ...interface{}) error {
+	return fmt.Errorf("%w: %s", errUnsupportedPolicy, fmt.Sprintf(format, args...))
 }

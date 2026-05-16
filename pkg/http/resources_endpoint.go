@@ -30,7 +30,13 @@ func (s *TriggerServer) resourcesHandler(resp http.ResponseWriter, req *http.Req
 
 	for _, v := range vals {
 
-		p := policy.GetPolicyFromLabelsOrAnnotations(v.GetLabels(), v.GetAnnotations())
+		p, _, err := policy.GetPolicyFromLabelsOrAnnotations(v.GetLabels(), v.GetAnnotations())
+		policyName := ""
+		if err != nil {
+			policyName = "invalid"
+		} else if p != nil {
+			policyName = p.Name()
+		}
 		filterFunc := kubernetes.GetMonitorContainersFromMeta(v.GetLabels(), v.GetAnnotations())
 
 		res = append(res, resource{
@@ -39,7 +45,7 @@ func (s *TriggerServer) resourcesHandler(resp http.ResponseWriter, req *http.Req
 			Name:        v.Name,
 			Namespace:   v.Namespace,
 			Kind:        v.Kind(),
-			Policy:      p.Name(),
+			Policy:      policyName,
 			Labels:      v.GetLabels(),
 			Annotations: v.GetAnnotations(),
 			Images:      v.GetImages(filterFunc),

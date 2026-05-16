@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Masterminds/semver"
 	"github.com/rusenask/cron"
 
 	v1 "k8s.io/api/core/v1"
@@ -216,8 +215,16 @@ func (p *Provider) TrackedImages() ([]*types.TrackedImage, error) {
 		annotations := gr.GetAnnotations()
 
 		// ignoring unlabelled deployments
-		plc := policy.GetPolicyFromLabelsOrAnnotations(labels, annotations)
-		if plc.Type() == types.PolicyTypeNone {
+		plc, filter, err := policy.GetPolicyFromLabelsOrAnnotations(labels, annotations)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"error":     err,
+				"name":      gr.Name,
+				"namespace": gr.Namespace,
+			}).Error("provider.kubernetes: failed to parse image policy; skipping resource")
+			continue
+		}
+		if plc == nil {
 			continue
 		}
 
@@ -267,15 +274,6 @@ func (p *Provider) TrackedImages() ([]*types.TrackedImage, error) {
 				continue
 			}
 
-			svp := make(map[string]string)
-
-			semverTag, err := semver.NewVersion(ref.Tag())
-			if err == nil {
-				if semverTag.Prerelease() != "" {
-					svp[semverTag.Prerelease()] = ref.Tag()
-				}
-			}
-
 			trackedImages = append(trackedImages, &types.TrackedImage{
 				Image:        ref,
 				PollSchedule: schedule,
@@ -285,6 +283,7 @@ func (p *Provider) TrackedImages() ([]*types.TrackedImage, error) {
 				Secrets:      secrets,
 				Meta:         make(map[string]string),
 				Policy:       plc,
+				Filter:       filter,
 			})
 		}
 	}
@@ -476,12 +475,21 @@ func (p *Provider) createUpdatePlans(repo *types.Repository) ([]*UpdatePlan, err
 		labels := resource.GetLabels()
 		annotations := resource.GetAnnotations()
 
-		plc := policy.GetPolicyFromLabelsOrAnnotations(labels, annotations)
-		if plc.Type() == types.PolicyTypeNone {
+		plc, filter, err := policy.GetPolicyFromLabelsOrAnnotations(labels, annotations)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"error":      err,
+				"deployment": resource.Name,
+				"kind":       resource.Kind(),
+				"namespace":  resource.Namespace,
+			}).Error("provider.kubernetes: failed to parse image policy; skipping resource")
+			continue
+		}
+		if plc == nil {
 			continue
 		}
 
-		updated, shouldUpdateDeployment, err := checkForUpdate(plc, repo, resource)
+		updated, shouldUpdateDeployment, err := checkForUpdate(plc, filter, repo, resource)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error":      err,

@@ -32,7 +32,7 @@ replace k8s.io/kubernetes => k8s.io/kubernetes v1.28.3
 
 require (
 	cloud.google.com/go/pubsub v1.45.1
-	github.com/Masterminds/semver v1.5.0
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/containerd/containerd v1.7.24 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
@@ -46,7 +46,6 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rusenask/cron v1.1.0
 	github.com/rusenask/docker-registry-client v0.0.0-20200210164146-049272422097
-	github.com/ryanuber/go-glob v1.0.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slack-go/slack v0.15.0
 	github.com/stretchr/testify v1.9.0
@@ -88,7 +87,6 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.49.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.3.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
 	github.com/Microsoft/hcsshim v0.12.9 // indirect

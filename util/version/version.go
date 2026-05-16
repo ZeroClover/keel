@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Masterminds/semver"
+	"github.com/Masterminds/semver/v3"
 	"github.com/keel-hq/keel/types"
 
 	log "github.com/sirupsen/logrus"
@@ -45,9 +45,9 @@ func GetVersion(version string) (*types.Version, error) {
 	}
 
 	return &types.Version{
-		Major:      v.Major(),
-		Minor:      v.Minor(),
-		Patch:      v.Patch(),
+		Major:      int64(v.Major()),
+		Minor:      int64(v.Minor()),
+		Patch:      int64(v.Patch()),
 		PreRelease: string(v.Prerelease()),
 		Metadata:   v.Metadata(),
 		Original:   v.Original(),
@@ -81,7 +81,7 @@ func GetImageNameAndVersion(name string) (string, *types.Version, error) {
 
 // NewAvailable - takes version and current tags. Checks whether there is a new version in the list of tags
 // and returns it as well as newAvailable bool
-func NewAvailable(current string, tags []string, matchPreRelease bool) (newVersion string, newAvailable bool, err error) {
+func NewAvailable(current string, tags []string, matchPrereleaseChannel bool) (newVersion string, newAvailable bool, err error) {
 
 	currentVersion, err := semver.NewVersion(current)
 	if err != nil {
@@ -104,7 +104,7 @@ func NewAvailable(current string, tags []string, matchPreRelease bool) (newVersi
 
 		}
 
-		if matchPreRelease && currentVersion.Prerelease() != v.Prerelease() {
+		if matchPrereleaseChannel && currentVersion.Prerelease() != v.Prerelease() {
 			continue
 		}
 

@@ -25,7 +25,7 @@ func TestWatchMultipleTagsWithSemver(t *testing.T) {
 				Trigger:      types.TriggerTypePoll,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewSemverPolicy(policy.SemverPolicyTypeAll, true),
+				Policy:       mustSemVerPolicy(">=0.0.0-0"),
 			},
 		},
 	}
@@ -57,6 +57,7 @@ type runTestCase struct {
 	currentTag  string
 	expectedTag string
 	bumpPolicy  policy.Policy
+	filter      policy.Filter
 }
 
 // Helper function to factorize code
@@ -67,6 +68,7 @@ func testRunHelper(testCases []runTestCase, availableTags []string, t *testing.T
 		testImages = append(testImages, &types.TrackedImage{
 			Image:  reference,
 			Policy: testCase.bumpPolicy,
+			Filter: testCase.filter,
 		})
 	}
 	fp := &fakeProvider{
@@ -117,82 +119,87 @@ func testRunHelper(testCases []runTestCase, availableTags []string, t *testing.T
 
 func TestWatchAllTagsJobWith2pointSemver(t *testing.T) {
 	availableTags := []string{"1.3", "2.5", "2.7", "3.8"}
-	testRunHelper([]runTestCase{{"1.3", "3.8", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, false)}}, availableTags, t)
-	testRunHelper([]runTestCase{{"2.5", "3.8", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, false)}}, availableTags, t)
-	testRunHelper([]runTestCase{{"2.5", "2.7", policy.NewSemverPolicy(policy.SemverPolicyTypeMinor, false)}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "1.3", expectedTag: "3.8", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "2.5", expectedTag: "3.8", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "2.5", expectedTag: "2.7", bumpPolicy: mustSemVerPolicy(">=2.0.0-0, <3.0.0-0")}}, availableTags, t)
 }
 
 func TestWatchAllTagsJobWithSemver(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "1.5.0", "1.8.0-alpha"}
-	testCases := []runTestCase{{"1.1.0", "1.5.0", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true)}}
+	testCases := []runTestCase{{currentTag: "1.1.0", expectedTag: "1.5.0", bumpPolicy: mustSemVerPolicy(">=0.0.0")}}
 	testRunHelper(testCases, availableTags, t)
 }
 
 func TestWatchAllTagsPrerelease(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "1.5.0", "1.8.0-alpha"}
-	testCases := []runTestCase{{"1.2.0-dev", "1.3.0-dev", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true)}}
+	testCases := []runTestCase{{
+		currentTag:  "1.2.0-dev",
+		expectedTag: "1.3.0-dev",
+		bumpPolicy:  mustSemVerPolicy(">=0.0.0-0"),
+		filter:      mustRegexFilter(`^.*-dev$`, ""),
+	}}
 	testRunHelper(testCases, availableTags, t)
 }
 
 // Full Semver, including pre-releases
 func TestWatchAllTagsFullSemver(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "1.5.0", "1.8.0-alpha"}
-	testCases := []runTestCase{{"1.2.0-dev", "1.8.0-alpha", policy.NewSemverPolicy(policy.SemverPolicyTypeMinor, false)}}
+	testCases := []runTestCase{{currentTag: "1.2.0-dev", expectedTag: "1.8.0-alpha", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}
 	testRunHelper(testCases, availableTags, t)
 
 	// Test simulating linuxserver tagging strategy
 	availableTags = []string{"v0.1.2-ls1", "v0.1.2-ls2", "v0.1.3-ls1", "v0.1.3-ls2", "v0.2.0-ls2", "v0.2.0-ls3"}
-	testCases = []runTestCase{{"v0.1.0-ls1", "v0.2.0-ls3", policy.NewSemverPolicy(policy.SemverPolicyTypeMinor, false)}}
+	testCases = []runTestCase{{currentTag: "v0.1.0-ls1", expectedTag: "v0.2.0-ls3", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}
 	testRunHelper(testCases, availableTags, t)
 
 }
 
 func TestWatchAllTagsHiddenMinorWith2PointVersions(t *testing.T) {
 	availableTags := []string{"1.3", "1.5", "2.0", "1.2.1"}
-	testRunHelper([]runTestCase{{"1.2", "1.2.1", policy.NewSemverPolicy(policy.SemverPolicyTypePatch, false)}}, availableTags, t)
-	testRunHelper([]runTestCase{{"1.2", "1.5", policy.NewSemverPolicy(policy.SemverPolicyTypeMinor, false)}}, availableTags, t)
-	testRunHelper([]runTestCase{{"1.2", "2.0", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, false)}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "1.2", expectedTag: "1.2.1", bumpPolicy: mustSemVerPolicy("~1.2")}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "1.2", expectedTag: "1.5", bumpPolicy: mustSemVerPolicy(">=1.0.0-0, <2.0.0-0")}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "1.2", expectedTag: "2.0", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}, availableTags, t)
 }
 
 // Bug #490: new major version "hiding" minor one
 func TestWatchAllTagsHiddenMinor(t *testing.T) {
 	availableTags := []string{"1.3.0", "1.5.0", "2.0.0", "1.2.1"}
-	testRunHelper([]runTestCase{{"1.2.0", "1.2.1", policy.NewSemverPolicy(policy.SemverPolicyTypePatch, false)}}, availableTags, t)
-	testRunHelper([]runTestCase{{"1.2.0", "1.5.0", policy.NewSemverPolicy(policy.SemverPolicyTypeMinor, false)}}, availableTags, t)
-	testRunHelper([]runTestCase{{"1.2.0", "2.0.0", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, false)}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "1.2.0", expectedTag: "1.2.1", bumpPolicy: mustSemVerPolicy("~1.2")}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "1.2.0", expectedTag: "1.5.0", bumpPolicy: mustSemVerPolicy(">=1.0.0-0, <2.0.0-0")}}, availableTags, t)
+	testRunHelper([]runTestCase{{currentTag: "1.2.0", expectedTag: "2.0.0", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}, availableTags, t)
 }
 
 func TestWatchAllTagsMixed(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "1.5.0", "1.8.0-alpha"}
 	testCases := []runTestCase{
-		{"1.0.0", "1.5.0", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true)},
-		{"1.2.0-dev", "1.3.0-dev", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true)}}
+		{currentTag: "1.0.0", expectedTag: "1.5.0", bumpPolicy: mustSemVerPolicy(">=0.0.0")},
+		{currentTag: "1.2.0-dev", expectedTag: "1.3.0-dev", bumpPolicy: mustSemVerPolicy(">=0.0.0-0"), filter: mustRegexFilter(`^.*-dev$`, "")}}
 	testRunHelper(testCases, availableTags, t)
 }
 
 func TestWatchGlobTagsMixed(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "build-1694132169", "build-1696801785", "build-1695801785"}
-	policy, _ := policy.NewGlobPolicy("glob:build-*")
+	plc, _ := policy.NewAlphabetical("desc")
 	testCases := []runTestCase{
-		{"1.0.0", "build-1696801785", policy},
+		{currentTag: "1.0.0", expectedTag: "build-1696801785", bumpPolicy: plc, filter: mustRegexFilter(`^build-.*$`, "")},
 	}
 	testRunHelper(testCases, availableTags, t)
 }
 
 func TestWatchRegexpTagsCompareMixed(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "build-2a3560ef-1694132169", "build-1a3560ef-1696801785", "build-3a3560ef-1695801785"}
-	policy, _ := policy.NewRegexpPolicy("regexp:^build-.*-(?P<compare>.+)$")
+	plc, _ := policy.NewNumerical("desc")
 	testCases := []runTestCase{
-		{"1.0.0", "build-1a3560ef-1696801785", policy},
+		{currentTag: "1.0.0", expectedTag: "build-1a3560ef-1696801785", bumpPolicy: plc, filter: mustRegexFilter(`^build-.*-(?P<compare>[0-9]+)$`, "$compare")},
 	}
 	testRunHelper(testCases, availableTags, t)
 }
 
 func TestWatchRegexpTagsMixed(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "build-2a3560ef-1694132169", "build-1a3560ef-1696801785", "build-3a3560ef-1695801785"}
-	policy, _ := policy.NewRegexpPolicy("regexp:^build-.*$")
+	plc, _ := policy.NewAlphabetical("desc")
 	testCases := []runTestCase{
-		{"1.0.0", "build-3a3560ef-1695801785", policy},
+		{currentTag: "1.0.0", expectedTag: "build-3a3560ef-1695801785", bumpPolicy: plc, filter: mustRegexFilter(`^build-.*$`, "")},
 	}
 	testRunHelper(testCases, availableTags, t)
 }
@@ -200,8 +207,8 @@ func TestWatchRegexpTagsMixed(t *testing.T) {
 func TestWatchAllTagsMixedPolicyAll(t *testing.T) {
 	availableTags := []string{"1.3.0-dev", "1.5.0", "1.8.0-alpha"}
 	testCases := []runTestCase{
-		{"1.0.0", "1.5.0", policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true)},
-		{"1.6.0-alpha", "1.8.0-alpha", policy.NewSemverPolicy(policy.SemverPolicyTypeAll, true)}}
+		{currentTag: "1.0.0", expectedTag: "1.5.0", bumpPolicy: mustSemVerPolicy(">=0.0.0")},
+		{currentTag: "1.6.0-alpha", expectedTag: "1.8.0-alpha", bumpPolicy: mustSemVerPolicy(">=0.0.0-0")}}
 	testRunHelper(testCases, availableTags, t)
 }
 
@@ -228,7 +235,7 @@ func TestWatchMultipleTagsWithCredentialsHelper(t *testing.T) {
 				Trigger:      types.TriggerTypePoll,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewSemverPolicy(policy.SemverPolicyTypeAll, true),
+				Policy:       mustSemVerPolicy(">=0.0.0-0"),
 			},
 		},
 	}

@@ -1,279 +1,71 @@
 package policy
 
-import (
-	"testing"
-)
+import "testing"
 
-func Test_shouldUpdate(t *testing.T) {
-	type args struct {
-		spt             SemverPolicyType
-		current         string
-		new             string
-		preReleaseMatch bool
-	}
+func TestSemVerLatest(t *testing.T) {
 	tests := []struct {
-		name    string
-		args    args
-		want    bool
-		wantErr bool
+		name       string
+		constraint string
+		candidates []string
+		want       string
+		wantErr    bool
 	}{
 		{
-			name: "new lower, policy all",
-			args: args{
-				current: "1.4.5",
-				new:     "1.4.3",
-				spt:     SemverPolicyTypeAll,
-			},
-			want:    false,
-			wantErr: false,
+			name:       "include prerelease",
+			constraint: ">=1.0.0-0",
+			candidates: []string{"1.0.0-rc.1", "1.0.0-rc.2", "0.9.0"},
+			want:       "1.0.0-rc.2",
 		},
 		{
-			name: "new minor increase, policy all",
-			args: args{
-				current: "1.4.5",
-				new:     "1.4.6",
-				spt:     SemverPolicyTypeAll,
-			},
-			want:    true,
-			wantErr: false,
+			name:       "exclude prerelease",
+			constraint: ">=1.0.0",
+			candidates: []string{"1.0.0", "1.0.0-rc.2", "1.1.0-beta.1"},
+			want:       "1.0.0",
 		},
 		{
-			name: "no increase, policy all",
-			args: args{
-				current: "1.4.5",
-				new:     "1.4.5",
-				spt:     SemverPolicyTypeAll,
-			},
-			want:    false,
-			wantErr: false,
+			name:       "caret range",
+			constraint: "^1",
+			candidates: []string{"1.0.0", "1.9.0", "2.0.0"},
+			want:       "1.9.0",
 		},
 		{
-			name: "minor increase - 2 points, policy all",
-			args: args{
-				current: "1.4",
-				new:     "1.5",
-				spt:     SemverPolicyTypeAll,
-			},
-			want:    true,
-			wantErr: false,
+			name:       "tilde range",
+			constraint: "~1.2",
+			candidates: []string{"1.2.0", "1.2.9", "1.3.0"},
+			want:       "1.2.9",
 		},
 		{
-			name: "minor increase, policy major",
-			args: args{
-				current: "1.4.5",
-				new:     "1.5.5",
-				spt:     SemverPolicyTypeMajor,
-			},
-			want:    true,
-			wantErr: false,
+			name:       "compound range",
+			constraint: ">=1.0.0, <2.0",
+			candidates: []string{"0.9.0", "1.5.0", "2.0.0"},
+			want:       "1.5.0",
 		},
 		{
-			name: "major increase, policy major",
-			args: args{
-				current: "1.4.5",
-				new:     "2.4.5",
-				spt:     SemverPolicyTypeMajor,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "patch increase, policy patch",
-			args: args{
-				current: "1.4.5",
-				new:     "1.4.6",
-				spt:     SemverPolicyTypePatch,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "patch release, policy patch",
-			args: args{
-				current: "1.4",
-				new:     "1.4.6",
-				spt:     SemverPolicyTypePatch,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "minor and patch release, policy patch",
-			args: args{
-				current: "1.4",
-				new:     "1.5.6",
-				spt:     SemverPolicyTypePatch,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "patch decrease, policy patch",
-			args: args{
-				current: "1.4.5",
-				new:     "1.4.4",
-				spt:     SemverPolicyTypePatch,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "2 points minor change, policy patch",
-			args: args{
-				current: "1.4",
-				new:     "1.5",
-				spt:     SemverPolicyTypePatch,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "patch AND major increase, policy patch",
-			args: args{
-				current: "1.4.5",
-				new:     "2.4.6",
-				spt:     SemverPolicyTypePatch,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "patch same, policy patch",
-			args: args{
-				current: "1.4.5",
-				new:     "1.4.5",
-				spt:     SemverPolicyTypePatch,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "minor increase, policy minor",
-			args: args{
-				current: "1.4.5",
-				new:     "1.5.5",
-				spt:     SemverPolicyTypeMinor,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "minor increase 2 points, policy minor",
-			args: args{
-				current: "1.4",
-				new:     "1.5",
-				spt:     SemverPolicyTypeMinor,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "patch increase, policy minor",
-			args: args{
-				current: "1.4.5",
-				new:     "1.4.6",
-				spt:     SemverPolicyTypeMinor,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "prerelease patch increase, policy minor, no prerelease",
-			args: args{
-				current:         "1.4.5",
-				new:             "1.4.5-xx",
-				spt:             SemverPolicyTypeMinor,
-				preReleaseMatch: true,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "parsed prerelease patch increase, policy minor, no prerelease",
-			args: args{
-				current:         "v1.0.0",
-				new:             "v1.0.1-metadata",
-				spt:             SemverPolicyTypeMinor,
-				preReleaseMatch: true,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "parsed prerelease minor increase, policy minor, both have metadata",
-			args: args{
-				current:         "v1.0.0-metadata",
-				new:             "v1.0.1-metadata",
-				spt:             SemverPolicyTypeMinor,
-				preReleaseMatch: true,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "prerelease patch increase, policy minor",
-			args: args{
-				current:         "1.4.5-xx",
-				new:             "1.4.6-xx",
-				spt:             SemverPolicyTypeMinor,
-				preReleaseMatch: true,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "patch increase, policy minor, wrong prerelease",
-			args: args{
-				current:         "1.4.5-xx",
-				new:             "1.4.6-yy",
-				spt:             SemverPolicyTypeMinor,
-				preReleaseMatch: true,
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "number",
-			args: args{
-				current: "1.4.5",
-				new:     "3050",
-				spt:     SemverPolicyTypeAll,
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "pre-release increase, policy All",
-			args: args{
-				current: "1.4.5-xx",
-				new:     "1.4.5-yy",
-				spt:     SemverPolicyTypeAll,
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "pre-release increase, policy Patch, do NOT match on pre-release",
-			args: args{
-				current:         "1.4.5-xx",
-				new:             "1.4.5-yy",
-				spt:             SemverPolicyTypePatch,
-				preReleaseMatch: false,
-			},
-			want:    true,
-			wantErr: false,
+			name:       "empty candidates",
+			constraint: ">=1.0.0",
+			wantErr:    true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := shouldUpdate(tt.args.spt, tt.args.preReleaseMatch, tt.args.current, tt.args.new)
+			p, err := NewSemVer(tt.constraint)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := p.Latest(tt.candidates)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("shouldUpdate() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Fatalf("Latest() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if got != tt.want {
-				t.Errorf("shouldUpdate() = %v, want %v", got, tt.want)
+				t.Fatalf("Latest() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewSemVerInvalidConstraint(t *testing.T) {
+	if _, err := NewSemVer("not a constraint"); err == nil {
+		t.Fatal("expected invalid constraint error")
 	}
 }

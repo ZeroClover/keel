@@ -9,19 +9,19 @@ import (
 
 var (
 	_PolicyTypeNameToValue = map[string]PolicyType{
-		"PolicyTypeNone":   PolicyTypeNone,
-		"PolicyTypeSemver": PolicyTypeSemver,
-		"PolicyTypeForce":  PolicyTypeForce,
-		"PolicyTypeGlob":   PolicyTypeGlob,
-		"PolicyTypeRegexp": PolicyTypeRegexp,
+		"PolicyTypeNone":         PolicyTypeNone,
+		"PolicyTypeSemver":       PolicyTypeSemver,
+		"PolicyTypeForce":        PolicyTypeForce,
+		"PolicyTypeAlphabetical": PolicyTypeAlphabetical,
+		"PolicyTypeNumerical":    PolicyTypeNumerical,
 	}
 
 	_PolicyTypeValueToName = map[PolicyType]string{
-		PolicyTypeNone:   "PolicyTypeNone",
-		PolicyTypeSemver: "PolicyTypeSemver",
-		PolicyTypeForce:  "PolicyTypeForce",
-		PolicyTypeGlob:   "PolicyTypeGlob",
-		PolicyTypeRegexp: "PolicyTypeRegexp",
+		PolicyTypeNone:         "PolicyTypeNone",
+		PolicyTypeSemver:       "PolicyTypeSemver",
+		PolicyTypeForce:        "PolicyTypeForce",
+		PolicyTypeAlphabetical: "PolicyTypeAlphabetical",
+		PolicyTypeNumerical:    "PolicyTypeNumerical",
 	}
 )
 
@@ -29,11 +29,11 @@ func init() {
 	var v PolicyType
 	if _, ok := interface{}(v).(fmt.Stringer); ok {
 		_PolicyTypeNameToValue = map[string]PolicyType{
-			interface{}(PolicyTypeNone).(fmt.Stringer).String():   PolicyTypeNone,
-			interface{}(PolicyTypeSemver).(fmt.Stringer).String(): PolicyTypeSemver,
-			interface{}(PolicyTypeForce).(fmt.Stringer).String():  PolicyTypeForce,
-			interface{}(PolicyTypeGlob).(fmt.Stringer).String():   PolicyTypeGlob,
-			interface{}(PolicyTypeRegexp).(fmt.Stringer).String(): PolicyTypeRegexp,
+			interface{}(PolicyTypeNone).(fmt.Stringer).String():         PolicyTypeNone,
+			interface{}(PolicyTypeSemver).(fmt.Stringer).String():       PolicyTypeSemver,
+			interface{}(PolicyTypeForce).(fmt.Stringer).String():        PolicyTypeForce,
+			interface{}(PolicyTypeAlphabetical).(fmt.Stringer).String(): PolicyTypeAlphabetical,
+			interface{}(PolicyTypeNumerical).(fmt.Stringer).String():    PolicyTypeNumerical,
 		}
 	}
 }

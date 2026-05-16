@@ -48,6 +48,7 @@ func getImages(vals chartutil.Values) ([]*types.TrackedImage, error) {
 			PollSchedule: keelCfg.PollSchedule,
 			Trigger:      keelCfg.Trigger,
 			Policy:       keelCfg.Plc,
+			Filter:       keelCfg.Filter,
 		}
 
 		if imageDetails.ImagePullSecret != "" {

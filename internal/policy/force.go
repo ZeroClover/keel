@@ -2,32 +2,23 @@ package policy
 
 import "github.com/keel-hq/keel/types"
 
-type ForcePolicy struct {
-	matchTag bool
+type Force struct{}
+
+func NewForce() *Force {
+	return &Force{}
 }
 
-func NewForcePolicy(matchTag bool) *ForcePolicy {
-	return &ForcePolicy{
-		matchTag: matchTag,
-	}
-}
-
-func (fp *ForcePolicy) ShouldUpdate(current, new string) (bool, error) {
-	if fp.matchTag && current != new {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (fp *ForcePolicy) Filter(tags []string) []string {
-	// todo: why is this not sorting?
-	return append([]string{}, tags...)
-}
-
-func (fp *ForcePolicy) Name() string {
+func (p *Force) Name() string {
 	return "force"
 }
 
-func (fp *ForcePolicy) Type() types.PolicyType { return types.PolicyTypeForce }
+func (p *Force) Type() types.PolicyType {
+	return types.PolicyTypeForce
+}
 
-func (fp *ForcePolicy) KeepTag() bool { return fp.matchTag }
+func (p *Force) Latest(candidates []string) (string, error) {
+	if len(candidates) == 0 {
+		return "", errEmpty
+	}
+	return candidates[0], nil
+}

@@ -172,8 +172,11 @@ secret:
 # uncomment lines below if you want Keel to automaticly
 # self-update to the latest release version
 # keel:
-#   # keel policy (all/major/minor/patch/force)
-#   policy: patch
+#   # keel policy (semver/alphabetical/numerical/force)
+#   policy: "semver:~1.2"
+#   # optional tag filter and extraction, Flux ImagePolicy style
+#   filterTags: "^v(?P<v>.*)$"
+#   extract: "$v"
 #   # trigger type, defaults to events such as pubsub, webhooks
 #   trigger: poll
 #   # polling schedule

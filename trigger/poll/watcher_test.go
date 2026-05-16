@@ -24,8 +24,24 @@ func mustParse(img string, schedule string) *types.TrackedImage {
 		Image:        ref,
 		PollSchedule: schedule,
 		Trigger:      types.TriggerTypePoll,
-		Policy:       policy.LegacyPolicyPopulate(ref),
+		Policy:       mustSemVerPolicy(">=0.0.0-0"),
 	}
+}
+
+func mustSemVerPolicy(r string) *policy.SemVer {
+	plc, err := policy.NewSemVer(r)
+	if err != nil {
+		panic(err)
+	}
+	return plc
+}
+
+func mustRegexFilter(pattern, replace string) *policy.RegexFilter {
+	filter, err := policy.NewRegexFilter(pattern, replace)
+	if err != nil {
+		panic(err)
+	}
+	return filter
 }
 
 // ======== fake registry client for testing =======
@@ -128,7 +144,7 @@ func TestWatchTagJobForce(t *testing.T) {
 				Trigger:      types.TriggerTypePoll,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewForcePolicy(true),
+				Policy:       policy.NewForce(),
 			},
 		},
 	}
@@ -147,12 +163,12 @@ func TestWatchTagJobForce(t *testing.T) {
 		t.Errorf("expected to find watching %s", img.Remote())
 	}
 
-	if dig, ok := watcher.watched["gcr.io/v2-namespace/hello-world:1.1.1"]; ok {
+	if dig, ok := watcher.watched["gcr.io/v2-namespace/hello-world"]; ok {
 		if dig.latest != "1.1.1" {
 			t.Errorf("unexpected event repository tag: %s", dig.latest)
 		}
 	} else {
-		t.Errorf("hello-world:1.1.1 watcher not found")
+		t.Errorf("hello-world watcher not found")
 	}
 }
 
@@ -208,7 +224,7 @@ func TestWatchAllTagsJob(t *testing.T) {
 		images: []*types.TrackedImage{
 			{
 				Image:  reference,
-				Policy: policy.NewSemverPolicy(policy.SemverPolicyTypeAll, true),
+				Policy: mustSemVerPolicy(">=0.0.0-0"),
 			},
 		},
 	}
@@ -246,7 +262,7 @@ func TestWatchAllTagsJobCurrentLatest(t *testing.T) {
 		images: []*types.TrackedImage{
 			{
 				Image:  reference,
-				Policy: policy.NewForcePolicy(true),
+				Policy: policy.NewForce(),
 			},
 		},
 	}
@@ -264,12 +280,12 @@ func TestWatchAllTagsJobCurrentLatest(t *testing.T) {
 
 	job.Run()
 
-	// checking whether new job was submitted
-
-	if len(fp.submitted) != 0 {
-		t.Errorf("expected 0 submitted events but got something: %s", fp.submitted[0].Repository)
+	if len(fp.submitted) != 1 {
+		t.Fatalf("expected 1 submitted event, got: %d", len(fp.submitted))
 	}
-
+	if fp.submitted[0].Repository.Tag != "1.1.2" {
+		t.Errorf("unexpected event repository tag: %s", fp.submitted[0].Repository.Tag)
+	}
 }
 
 func TestWatchMultipleTags(t *testing.T) {
@@ -286,7 +302,7 @@ func TestWatchMultipleTags(t *testing.T) {
 				Trigger:      types.TriggerTypePoll,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true),
+				Policy:       mustSemVerPolicy(">=0.0.0-0"),
 			},
 
 			{
@@ -294,7 +310,7 @@ func TestWatchMultipleTags(t *testing.T) {
 				Image:        imgB,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true),
+				Policy:       mustSemVerPolicy(">=0.0.0-0"),
 			},
 
 			{
@@ -302,7 +318,7 @@ func TestWatchMultipleTags(t *testing.T) {
 				Image:        imgC,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewForcePolicy(true),
+				Policy:       policy.NewForce(),
 			},
 
 			{
@@ -310,7 +326,7 @@ func TestWatchMultipleTags(t *testing.T) {
 				Image:        imgD,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.NewForcePolicy(true),
+				Policy:       policy.NewForce(),
 			},
 		},
 	}
@@ -333,22 +349,8 @@ func TestWatchMultipleTags(t *testing.T) {
 
 	watcher.Watch(tracked...)
 
-	if len(watcher.watched) != 4 {
-		t.Errorf("expected to find watching 4 entries, found: %d", len(watcher.watched))
-	}
-
-	if dig, ok := watcher.watched["gcr.io/v2-namespace/greetings-world:alpha"]; ok != true {
-		t.Errorf("alpha watcher not found")
-		if dig.digest != "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb" {
-			t.Errorf("digest not set for alpha")
-		}
-	}
-
-	if dig, ok := watcher.watched["gcr.io/v2-namespace/greetings-world:master"]; ok != true {
-		t.Errorf("master watcher not found")
-		if dig.digest != "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb" {
-			t.Errorf("digest not set for master")
-		}
+	if len(watcher.watched) != 2 {
+		t.Errorf("expected to find watching 2 entries, found: %d", len(watcher.watched))
 	}
 
 	if det, ok := watcher.watched["gcr.io/v2-namespace/greetings-world"]; ok != true {
@@ -531,22 +533,8 @@ func TestUnwatchAfterNotTrackedAnymore(t *testing.T) {
 
 	watcher.Watch(tracked...)
 
-	if len(watcher.watched) != 4 {
-		t.Errorf("expected to find watching 4 entries, found: %d", len(watcher.watched))
-	}
-
-	if dig, ok := watcher.watched["gcr.io/v2-namespace/greetings-world:alpha"]; ok != true {
-		t.Errorf("alpha watcher not found")
-		if dig.digest != "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb" {
-			t.Errorf("digest not set for alpha")
-		}
-	}
-
-	if dig, ok := watcher.watched["gcr.io/v2-namespace/greetings-world:master"]; ok != true {
-		t.Errorf("alpha watcher not found")
-		if dig.digest != "sha256:0604af35299dd37ff23937d115d103532948b568a9dd8197d14c256a8ab8b0bb" {
-			t.Errorf("digest not set for alpha")
-		}
+	if len(watcher.watched) != 2 {
+		t.Errorf("expected to find watching 2 entries, found: %d", len(watcher.watched))
 	}
 
 	if det, ok := watcher.watched["gcr.io/v2-namespace/greetings-world"]; ok != true {
@@ -564,7 +552,7 @@ func TestUnwatchAfterNotTrackedAnymore(t *testing.T) {
 
 	watcher.Watch(trackedUpdated...)
 
-	if len(watcher.watched) != 3 {
-		t.Errorf("expected to find watching 3 entries, found: %d", len(watcher.watched))
+	if len(watcher.watched) != 2 {
+		t.Errorf("expected to find watching 2 entries, found: %d", len(watcher.watched))
 	}
 }

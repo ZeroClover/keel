@@ -90,8 +90,8 @@ type UpdatePlan struct {
 }
 
 // keel:
-//   # keel policy (all/major/minor/patch/force)
-//   policy: all
+//   # keel policy (semver/alphabetical/numerical/force)
+//   policy: "semver:>=0.0.0"
 //   # trigger type, defaults to events such as pubsub, webhooks
 //   trigger: poll
 //   pollSchedule: "@every 2m"
@@ -108,14 +108,15 @@ type Root struct {
 // KeelChartConfig - keel related configuration taken from values.yaml
 type KeelChartConfig struct {
 	Policy               string            `json:"policy"`
-	MatchTag             bool              `json:"matchTag"`
-	MatchPreRelease      bool              `json:"matchPreRelease"`
+	FilterTags           string            `json:"filterTags"`
+	Extract              string            `json:"extract"`
 	Trigger              types.TriggerType `json:"trigger"`
 	PollSchedule         string            `json:"pollSchedule"`
 	Images               []ImageDetails    `json:"images"`
 	NotificationChannels []string          `json:"notificationChannels"` // optional notification channels
 
-	Plc policy.Policy `json:"-"`
+	Plc    types.Policy `json:"-"`
+	Filter types.Filter `json:"-"`
 }
 
 // ImageDetails - image details
@@ -191,11 +192,18 @@ func (p *Provider) TrackedImages() ([]*types.TrackedImage, error) {
 
 		cfg, err := getKeelConfig(vals)
 		if err != nil {
+			if err == ErrPolicyNotSpecified {
+				log.WithFields(log.Fields{
+					"release":   release.Name,
+					"namespace": release.Namespace,
+				}).Debug("provider.helm3: release has no keel policy")
+				continue
+			}
 			log.WithFields(log.Fields{
 				"error":     err,
 				"release":   release.Name,
 				"namespace": release.Namespace,
-			}).Debug("provider.helm3: failed to get config for release")
+			}).Error("provider.helm3: failed to get config for release")
 			continue
 		}
 
@@ -426,20 +434,45 @@ func getKeelConfig(vals chartutil.Values) (*KeelChartConfig, error) {
 	}
 
 	var r Root
-	// Default MatchPreRelease to true if not present (backward compatibility)
-	r.Keel.MatchPreRelease = true
 	err = yaml.Unmarshal([]byte(yamlFull), &r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse keel config: %s", err)
 	}
 
-	if r.Keel.Policy == "" {
+	cfg := r.Keel
+
+	annotations := map[string]string{}
+	if cfg.Policy != "" {
+		annotations[types.KeelPolicyLabel] = cfg.Policy
+	}
+	if cfg.FilterTags != "" {
+		annotations[types.KeelFilterTagsAnnotation] = cfg.FilterTags
+	}
+	if cfg.Extract != "" {
+		annotations[types.KeelExtractAnnotation] = cfg.Extract
+	}
+	if hasValue(vals, "keel.matchTag") {
+		annotations["keel.sh/matchTag"] = "true"
+	}
+	if hasValue(vals, "keel.matchPreRelease") {
+		annotations["keel.sh/matchPreRelease"] = "true"
+	}
+
+	plc, filter, err := policy.GetPolicyFromLabelsOrAnnotations(nil, annotations)
+	if err != nil {
+		return nil, err
+	}
+	if plc == nil {
 		return nil, ErrPolicyNotSpecified
 	}
 
-	cfg := r.Keel
-
-	cfg.Plc = policy.GetPolicy(cfg.Policy, &policy.Options{MatchTag: cfg.MatchTag, MatchPreRelease: cfg.MatchPreRelease})
+	cfg.Plc = plc
+	cfg.Filter = filter
 
 	return &cfg, nil
+}
+
+func hasValue(vals chartutil.Values, path string) bool {
+	_, err := vals.PathValue(path)
+	return err == nil
 }

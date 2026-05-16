@@ -36,8 +36,11 @@ Add the following to your app's `values.yaml` file and do `helm upgrade ...`:
 
 ```
 keel:
-  # keel policy (all/major/minor/patch/force)
-  policy: all
+  # keel policy (semver/alphabetical/numerical/force)
+  policy: "semver:>=0.0.0"
+  # optional tag filter and extraction
+  filterTags: "^v(?P<v>.*)$"
+  extract: "$v"
   # trigger type, defaults to events such as pubsub, webhooks
   trigger: poll
   # polling schedule
@@ -52,9 +55,39 @@ The same can be applied with `--set` flag without using `values.yaml` file:
 
 ```console
 $ helm upgrade --install whd webhookdemo --namespace keel --reuse-values \
-  --set keel.policy="all",keel.trigger="poll",keel.pollSchedule="@every 3m" \
+  --set keel.policy="semver:>=0.0.0",keel.trigger="poll",keel.pollSchedule="@every 3m" \
   --set keel.images[0].repository="image.repository" \
   --set keel.images[0].tag="image.tag"
+```
+
+### Policy, Filter, and Extract
+
+Helm values map directly to the Kubernetes annotations:
+
+| Helm value | Annotation | Example |
+|---|---|---|
+| `keel.policy` | `keel.sh/policy` | `semver:>=1.0.0` |
+| `keel.filterTags` | `keel.sh/filterTags` | `^v(?P<v>.*)$` |
+| `keel.extract` | `keel.sh/extract` | `$v` |
+
+Common policy examples:
+
+```yaml
+# Stable semver tags only
+keel:
+  policy: "semver:>=1.0.0"
+
+# Release candidates and other pre-releases
+keel:
+  policy: "semver:>=1.0.0-0"
+  filterTags: "^v(?P<v>.*-rc\\.[0-9]+)$"
+  extract: "$v"
+
+# Mainline dev tags with numeric timestamps
+keel:
+  policy: "numerical:desc"
+  filterTags: "^main-[a-f0-9]+-(?P<ts>[0-9]+)$"
+  extract: "$ts"
 ```
 
 You can read in more details about supported policies, triggers and etc in the [User Guide](https://keel.sh/user-guide/).

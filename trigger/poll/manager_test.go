@@ -2,7 +2,6 @@ package poll
 
 import (
 	"context"
-	"github.com/keel-hq/keel/internal/policy"
 	"log"
 	"os"
 	"path/filepath"
@@ -59,7 +58,7 @@ func TestCheckDeployment(t *testing.T) {
 				Trigger:      types.TriggerTypePoll,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.LegacyPolicyPopulate(imgA),
+				Policy:       mustSemVerPolicy(">=0.0.0-0"),
 			},
 
 			{
@@ -67,7 +66,7 @@ func TestCheckDeployment(t *testing.T) {
 				Image:        imgB,
 				Provider:     "fp",
 				PollSchedule: types.KeelPollDefaultSchedule,
-				Policy:       policy.LegacyPolicyPopulate(imgB),
+				Policy:       mustSemVerPolicy(">=0.0.0-0"),
 			},
 		},
 	}
@@ -95,7 +94,7 @@ func TestCheckDeployment(t *testing.T) {
 	}
 
 	ref, _ := image.Parse(imageA)
-	keyA := getImageIdentifier(ref, false)
+	keyA := getImageIdentifier(ref)
 	if watcher.watched[keyA].digest != frc.digestToReturn {
 		t.Errorf("unexpected digest")
 	}
@@ -110,7 +109,7 @@ func TestCheckDeployment(t *testing.T) {
 	}
 
 	refB, _ := image.Parse(imageB)
-	keyB := getImageIdentifier(refB, false)
+	keyB := getImageIdentifier(refB)
 	if watcher.watched[keyB].digest != frc.digestToReturn {
 		t.Errorf("unexpected digest")
 	}
@@ -165,7 +164,7 @@ func TestCheckECRDeployment(t *testing.T) {
 		t.Fatalf("unexpected list of cron entries: %d", len(entries))
 	}
 
-	keyA := getImageIdentifier(imgA, false)
+	keyA := getImageIdentifier(imgA)
 
 	if len(watcher.watched) != 1 {
 		t.Fatalf("expected to find 1 entry in watcher.watched map, found: %d", len(watcher.watched))

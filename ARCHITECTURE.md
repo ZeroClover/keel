@@ -116,19 +116,19 @@ Policies determine which version updates are allowed. Set via `keel.sh/policy` a
 type PolicyType int
 const (
     PolicyTypeNone PolicyType = iota
-    PolicyTypeSemver  // major, minor, patch, all
-    PolicyTypeForce   // always update (for :latest)
-    PolicyTypeGlob    // glob pattern matching
-    PolicyTypeRegexp  // regex pattern matching
+    PolicyTypeSemver       // semver:<constraint>
+    PolicyTypeForce        // select first supplied candidate
+    PolicyTypeAlphabetical // alphabetical[:asc|desc]
+    PolicyTypeNumerical    // numerical[:asc|desc]
 )
 ```
 
 **Policy examples:**
-- `keel.sh/policy: major` - Allow major version bumps (1.x.x → 2.x.x)
-- `keel.sh/policy: minor` - Allow minor bumps (1.1.x → 1.2.x)
-- `keel.sh/policy: patch` - Allow patch bumps only (1.1.1 → 1.1.2)
-- `keel.sh/policy: force` - Always update (for mutable tags like `latest`)
-- `keel.sh/policy: glob:release-*` - Match glob patterns
+- `keel.sh/policy: "semver:^1"` - highest stable tag in the 1.x range
+- `keel.sh/policy: "semver:>=1.0.0-0"` - highest tag including pre-releases
+- `keel.sh/policy: "alphabetical:desc"` - lexicographically highest matching tag
+- `keel.sh/policy: "numerical:desc"` with `keel.sh/filterTags` and `keel.sh/extract` - highest extracted number
+- `keel.sh/policy: "force"` - first supplied candidate
 
 ### 4. Notifications
 
@@ -158,12 +158,12 @@ _ "github.com/keel-hq/keel/extension/notification/slack"
 
 | Annotation | Purpose | Example |
 |------------|---------|---------|
-| `keel.sh/policy` | Update policy | `minor`, `patch`, `force`, `glob:v*` |
+| `keel.sh/policy` | Update policy | `semver:^1`, `alphabetical:desc`, `numerical:desc`, `force` |
+| `keel.sh/filterTags` | Regex filter for candidate tags | `^main-(?P<ts>[0-9]+)$` |
+| `keel.sh/extract` | Replacement template for filtered tags | `$ts` |
 | `keel.sh/trigger` | Trigger type | `poll` (default: webhooks) |
 | `keel.sh/pollSchedule` | Poll frequency | `@every 5m` |
 | `keel.sh/notify` | Override notification channel | `#deployments` |
-| `keel.sh/matchTag` | Force tag matching | `true` |
-| `keel.sh/matchPreRelease` | Match pre-release versions | `true` |
 | `keel.sh/digest` | Track by digest (internal) | SHA256 digest |
 | `keel.sh/imagePullSecret` | Registry credentials secret | `my-registry-secret` |
 | `keel.sh/releaseNotes` | Release notes URL | `https://...` |

@@ -12,7 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func checkForUpdate(plc policy.Policy, repo *types.Repository, resource *k8s.GenericResource) (updatePlan *UpdatePlan, shouldUpdateDeployment bool, err error) {
+func checkForUpdate(plc policy.Policy, filter policy.Filter, repo *types.Repository, resource *k8s.GenericResource) (updatePlan *UpdatePlan, shouldUpdateDeployment bool, err error) {
 	updatePlan = &UpdatePlan{}
 
 	eventRepoRef, err := image.Parse(repo.String())
@@ -63,7 +63,7 @@ func checkForUpdate(plc policy.Policy, repo *types.Repository, resource *k8s.Gen
 				continue
 			}
 
-			shouldUpdateContainer, err := plc.ShouldUpdate(containerImageRef.Tag(), eventRepoRef.Tag())
+			shouldUpdateContainer, err := policy.AllowsTag(plc, filter, containerImageRef.Tag(), eventRepoRef.Tag())
 			if err != nil {
 				log.WithFields(log.Fields{
 					"error":             err,
@@ -127,7 +127,7 @@ func checkForUpdate(plc policy.Policy, repo *types.Repository, resource *k8s.Gen
 			continue
 		}
 
-		shouldUpdateContainer, err := plc.ShouldUpdate(containerImageRef.Tag(), eventRepoRef.Tag())
+		shouldUpdateContainer, err := policy.AllowsTag(plc, filter, containerImageRef.Tag(), eventRepoRef.Tag())
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error":             err,

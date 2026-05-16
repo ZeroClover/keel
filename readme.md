@@ -145,7 +145,7 @@ metadata:
   labels: 
     name: "wd"
   annotations:
-    keel.sh/policy: minor # <-- policy name according to https://semver.org/
+    keel.sh/policy: "semver:^0" # <-- semver constraint, Flux ImagePolicy style
     keel.sh/trigger: poll # <-- actively query registry, otherwise defaults to webhooks
 spec:
   template:
@@ -164,6 +164,40 @@ spec:
 ```
 
 No additional configuration is required. Enabling continuous delivery for your workloads has never been this easy!
+
+#### Policies
+
+`keel.sh/policy` accepts four policy families:
+
+| Policy | Example | Behavior |
+|---|---|---|
+| `semver:<constraint>` | `semver:>=1.0.0` | Selects the highest tag matching a Masterminds semver v3 constraint. Use `>=1.0.0-0` to include pre-releases. |
+| `alphabetical[:asc\|desc]` | `alphabetical:desc` | Selects the lexicographically lowest (`asc`, default) or highest (`desc`) tag. |
+| `numerical[:asc\|desc]` | `numerical:desc` | Selects the numerically lowest (`asc`, default) or highest (`desc`) extracted tag. Non-numeric candidates are errors. |
+| `force` | `force` | Selects the first candidate supplied by the caller. |
+
+Use `keel.sh/filterTags` to keep only tags matching an RE2 regular expression, and `keel.sh/extract` to pass a capture group to the policy:
+
+```yaml
+annotations:
+  keel.sh/policy: "numerical:desc"
+  keel.sh/filterTags: "^main-[a-f0-9]+-(?P<ts>[0-9]+)$"
+  keel.sh/extract: "$ts"
+```
+
+#### Upgrading from older policies
+
+Legacy policy values and annotations now fail parsing and the resource is skipped until it is migrated.
+
+| Old configuration | New configuration |
+|---|---|
+| `keel.sh/policy: all` | `keel.sh/policy: "semver:>=0.0.0"` or `semver:>=0.0.0-0` to include pre-releases |
+| `keel.sh/policy: major` | `keel.sh/policy: "semver:^X"` |
+| `keel.sh/policy: minor` | `keel.sh/policy: "semver:^X.Y"` |
+| `keel.sh/policy: patch` | `keel.sh/policy: "semver:~X.Y.Z"` |
+| `keel.sh/policy: glob:release-*` | `keel.sh/policy: "alphabetical:desc"` and `keel.sh/filterTags: "^release-.*$"` |
+| `keel.sh/policy: regexp:^build-([0-9]+)$` | `keel.sh/policy: "numerical:desc"`, `keel.sh/filterTags: "^build-([0-9]+)$"`, `keel.sh/extract: "$1"` |
+| `keel.sh/matchTag`, `keel.sh/match-tag`, `keel.sh/matchPreRelease` | remove these annotations |
 
 ### Documentation
 

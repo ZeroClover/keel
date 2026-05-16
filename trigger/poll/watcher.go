@@ -92,10 +92,7 @@ func (w *RepositoryWatcher) Start(ctx context.Context) {
 
 // This identifier is used to key the watchers, so that only a watcher
 // is setup per identifier
-func getImageIdentifier(ref *image.Reference, keepTag bool) string {
-	if keepTag == true {
-		return ref.Registry() + "/" + ref.ShortName() + ":" + ref.Tag()
-	}
+func getImageIdentifier(ref *image.Reference) string {
 	return ref.Registry() + "/" + ref.ShortName()
 }
 
@@ -172,7 +169,7 @@ func (w *RepositoryWatcher) watch(image *types.TrackedImage) (string, error) {
 		return "", fmt.Errorf("invalid cron schedule: %s", err)
 	}
 
-	key := getImageIdentifier(image.Image, image.Policy.KeepTag())
+	key := getImageIdentifier(image.Image)
 
 	// checking whether it's already being watched
 	details, ok := w.watched[key]
@@ -238,7 +235,7 @@ func (w *RepositoryWatcher) addJob(ti *types.TrackedImage, schedule string) erro
 		return err
 	}
 
-	key := getImageIdentifier(ti.Image, ti.Policy.KeepTag())
+	key := getImageIdentifier(ti.Image)
 
 	details := &watchDetails{
 		trackedImage: ti,
@@ -249,23 +246,6 @@ func (w *RepositoryWatcher) addJob(ti *types.TrackedImage, schedule string) erro
 
 	// adding job to internal map
 	w.watched[key] = details
-
-	// read the docs several times, the only legit case when want a tag watcher
-	// is when policy is force and keel.sh/match-tag=true.
-	if ti.Policy.KeepTag() {
-		// adding new job
-		job := NewWatchTagJob(w.providers, w.registryClient, details)
-		log.WithFields(log.Fields{
-			"job_name": key,
-			"image":    ti.Image.String(),
-			"digest":   digest,
-			"schedule": schedule,
-		}).Info("trigger.poll.RepositoryWatcher: new watch tag digest job added")
-
-		// running it now
-		job.Run()
-		return w.cron.AddJob(key, schedule, job)
-	}
 
 	// adding new job
 	job := NewWatchRepositoryTagsJob(w.providers, w.registryClient, details)

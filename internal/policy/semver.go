@@ -1,138 +1,54 @@
 package policy
 
 import (
-	"errors"
 	"fmt"
-	"sort"
-	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/keel-hq/keel/types"
-
-	"github.com/Masterminds/semver"
 )
 
-// SemverPolicyType - policy type
-type SemverPolicyType int
-
-var (
-	ErrNoMajorMinorPatchElementsFound = errors.New("No Major.Minor.Patch elements found")
-)
-
-// available policies
-const (
-	SemverPolicyTypeNone SemverPolicyType = iota
-	SemverPolicyTypeAll
-	SemverPolicyTypeMajor
-	SemverPolicyTypeMinor
-	SemverPolicyTypePatch
-)
-
-func (t SemverPolicyType) String() string {
-	switch t {
-	case SemverPolicyTypeNone:
-		return "none"
-	case SemverPolicyTypeAll:
-		return "all"
-	case SemverPolicyTypeMajor:
-		return "major"
-	case SemverPolicyTypeMinor:
-		return "minor"
-	case SemverPolicyTypePatch:
-		return "patch"
-	default:
-		return ""
-	}
+type SemVer struct {
+	Range      string
+	constraint *semver.Constraints
 }
 
-func NewSemverPolicy(spt SemverPolicyType, matchPreRelease bool) *SemverPolicy {
-	return &SemverPolicy{
-		spt:             spt,
-		matchPreRelease: matchPreRelease,
-	}
-}
-
-type SemverPolicy struct {
-	spt             SemverPolicyType
-	matchPreRelease bool
-}
-
-func (sp *SemverPolicy) ShouldUpdate(current, new string) (bool, error) {
-	return shouldUpdate(sp.spt, sp.matchPreRelease, current, new)
-}
-
-func (sp *SemverPolicy) Name() string {
-	return sp.spt.String()
-}
-
-func (sp *SemverPolicy) Type() types.PolicyType { return types.PolicyTypeSemver }
-
-func (sp *SemverPolicy) KeepTag() bool { return false }
-
-func shouldUpdate(spt SemverPolicyType, matchPreRelease bool, current, new string) (bool, error) {
-	if current == "latest" {
-		return true, nil
-	}
-
-	parts := strings.SplitN(new, ".", 3)
-	if len(parts) != 2 && len(parts) != 3 {
-		return false, ErrNoMajorMinorPatchElementsFound
-	}
-
-	currentVersion, err := semver.NewVersion(current)
+func NewSemVer(r string) (*SemVer, error) {
+	constraint, err := semver.NewConstraint(r)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse current version: %s", err)
+		return nil, err
 	}
-
-	newVersion, err := semver.NewVersion(new)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse new version: %s", err)
-	}
-
-	// Do not enforce pre-release match when either:
-	// - All policy
-	// - matchPreRelease set to false
-	if currentVersion.Prerelease() != newVersion.Prerelease() && spt != SemverPolicyTypeAll && matchPreRelease {
-		return false, nil
-	}
-
-	// new version is not higher than current - do nothing
-	if !currentVersion.LessThan(newVersion) {
-		return false, nil
-	}
-
-	switch spt {
-	case SemverPolicyTypeAll, SemverPolicyTypeMajor:
-		return true, nil
-	case SemverPolicyTypeMinor:
-		return newVersion.Major() == currentVersion.Major(), nil
-	case SemverPolicyTypePatch:
-		return newVersion.Major() == currentVersion.Major() && newVersion.Minor() == currentVersion.Minor(), nil
-	}
-	return false, nil
+	return &SemVer{
+		Range:      r,
+		constraint: constraint,
+	}, nil
 }
 
-func (sp *SemverPolicy) Filter(tags []string) []string {
-	var versions []*semver.Version
-	var filtered []string
+func (p *SemVer) Name() string {
+	return "semver"
+}
 
-	for _, t := range tags {
-		if len(strings.SplitN(t, ".", 3)) < 2 {
-			// Keep only X.Y.Z+ semver
-			continue
-		}
-		v, err := semver.NewVersion(t)
-		// Filter out non semver tags
+func (p *SemVer) Type() types.PolicyType {
+	return types.PolicyTypeSemver
+}
+
+func (p *SemVer) Latest(versions []string) (string, error) {
+	if len(versions) == 0 {
+		return "", errEmpty
+	}
+
+	var latest *semver.Version
+	for _, tag := range versions {
+		v, err := semver.NewVersion(tag)
 		if err != nil {
 			continue
 		}
-		versions = append(versions, v)
+		if p.constraint.Check(v) && (latest == nil || v.GreaterThan(latest)) {
+			latest = v
+		}
 	}
 
-	sort.Slice(versions, func(i, j int) bool { return versions[j].LessThan(versions[i]) })
-
-	for _, version := range versions {
-		filtered = append(filtered, version.Original())
+	if latest == nil {
+		return "", fmt.Errorf("%w", errNoMatch)
 	}
-
-	return filtered
+	return latest.Original(), nil
 }

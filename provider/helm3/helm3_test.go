@@ -1,11 +1,9 @@
 package helm3
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/keel-hq/keel/extension/notification"
-	"github.com/keel-hq/keel/internal/policy"
 	"github.com/keel-hq/keel/types"
 	"sigs.k8s.io/yaml"
 
@@ -30,10 +28,9 @@ func (s *fakeSender) Send(event types.EventNotification) error {
 type fakeImplementer struct {
 	listReleasesResponse []*release.Release
 
-	// updated info
 	updatedRlsName string
 	updatedChart   *chart.Chart
-	// updatedOptions []helm.UpdateOption
+	updatedValues  map[string]string
 }
 
 func (i *fakeImplementer) ListReleases() ([]*release.Release, error) {
@@ -41,658 +38,153 @@ func (i *fakeImplementer) ListReleases() ([]*release.Release, error) {
 }
 
 func (i *fakeImplementer) UpdateReleaseFromChart(rlsName string, chart *chart.Chart, vals map[string]string, namespace string, opts ...bool) (*release.Release, error) {
-	// func (i *fakeImplementer) UpdateReleaseFromChart(rlsName string, chart *chart.Chart, opts ...helm.UpdateOption) (*rls.UpdateReleaseResponse, error) {
 	i.updatedRlsName = rlsName
 	i.updatedChart = chart
-	// i.updatedOptions = opts
-
-	return &release.Release{
-		Name:    rlsName,
-		Chart:   chart,
-		Version: 2,
-	}, nil
+	i.updatedValues = vals
+	return &release.Release{Name: rlsName, Chart: chart, Version: 2}, nil
 }
 
-// helper function to generate keel configuration
-func testingConfigYaml(cfg *KeelChartConfig) (vals chartutil.Values, err error) {
+func testingConfigYaml(cfg *KeelChartConfig) (chartutil.Values, error) {
 	root := &Root{Keel: *cfg}
 	bts, err := yaml.Marshal(root)
 	if err != nil {
 		return nil, err
 	}
-
 	return chartutil.ReadValues(bts)
 }
 
-// helper function to generate chart.Chart object from string
-func testingStringToChart(raw string) (myChart *chart.Chart, err error) {
+func testingStringToChart(raw string) (*chart.Chart, error) {
 	chartVals, err := chartutil.ReadValues([]byte(raw))
 	if err != nil {
 		return nil, err
 	}
-	myChart = &chart.Chart{
+	return &chart.Chart{
 		Values:   chartVals,
 		Metadata: &chart.Metadata{Name: "app-x"},
-	}
-	return myChart, nil
+	}, nil
 }
 
-func TestGetChartPolicy(t *testing.T) {
-
-	chartVals := `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
-image:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.1.0
-
-keel:  
-  policy: all  
-  trigger: poll  
-  images:
-    - repository: image.repository
-      tag: image.tag
-`
-
-	myChart, err := testingStringToChart(chartVals)
-	if err != nil {
-		t.Errorf("chartutil.ReadValues error = %v", err)
-	}
-
-	fakeImpl := &fakeImplementer{
-		listReleasesResponse: []*release.Release{
-			{
-				Name:   "release-1",
-				Chart:  myChart,
-				Config: make(map[string]interface{}),
-			},
-		},
-	}
-
-	releases, err := fakeImpl.ListReleases()
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	if len(releases) == 0 {
-		t.Fatalf("unexpexted error: releases should not be empty")
-	}
-
-	policyFound := false
-
-	for _, release := range releases {
-
-		vals, err := values(release.Chart, release.Config)
-		if err != nil {
-			t.Fatalf("failed to get values: %s", err)
-		}
-
-		cfg, err := getKeelConfig(vals)
-		if err != nil {
-			t.Errorf("failed to get image paths: %s", err)
-		}
-
-		if cfg.Plc.Name() == policy.SemverPolicyTypeAll.String() {
-			policyFound = true
-		}
-	}
-
-	if !policyFound {
-		t.Errorf("policy not found")
-	}
-}
-
-func TestGetChartPolicyFromProm(t *testing.T) {
-
-	myChart, err := testingStringToChart(promChartValues)
-	if err != nil {
-		t.Errorf("chartutil.ReadValues error = %v", err)
-	}
-
-	fakeImpl := &fakeImplementer{
-		listReleasesResponse: []*release.Release{
-			{
-				Name:   "release-1",
-				Chart:  myChart,
-				Config: make(map[string]interface{}),
-			},
-		},
-	}
-
-	releases, err := fakeImpl.ListReleases()
-	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	policyFound := false
-
-	for _, release := range releases {
-
-		vals, err := values(release.Chart, release.Config)
-		if err != nil {
-			t.Fatalf("failed to get values: %s", err)
-		}
-
-		cfg, err := getKeelConfig(vals)
-		if err != nil {
-			t.Errorf("failed to get image paths: %s", err)
-		}
-
-		if cfg.Plc.Name() == policy.SemverPolicyTypeAll.String() {
-			policyFound = true
-		}
-	}
-
-	if !policyFound {
-		t.Errorf("policy not found")
-	}
-}
-
-func TestGetTrackedReleases(t *testing.T) {
-
-	chartVals := `
-name: chart-x
-where:
-  city: kaunas
-  title: hmm
-image:
-  repository: gcr.io/v2-namespace/bye-world
-  tag: 1.1.0
-
-image2:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.2.0 
-
-keel:  
-  policy: all  
-  trigger: poll  
-  images:
-    - repository: image.repository
-      tag: image.tag
-
-`
-
-	myChart, err := testingStringToChart(chartVals)
-	if err != nil {
-		t.Errorf("chartutil.ReadValues error = %v", err)
-	}
-
-	fakeImpl := &fakeImplementer{
-		listReleasesResponse: []*release.Release{
-			{
-				Name:   "release-1",
-				Chart:  myChart,
-				Config: make(map[string]interface{}),
-			},
-		},
-	}
-	prov := NewProvider(fakeImpl, &fakeSender{})
-
-	tracked, _ := prov.TrackedImages()
-
-	if tracked[0].Image.Remote() != "gcr.io/v2-namespace/bye-world:1.1.0" {
-		t.Errorf("unexpected image: %s", tracked[0].Image.Remote())
-	}
-}
-
-func TestGetTrackedReleasesWithoutKeelConfig(t *testing.T) {
-
-	chartVals := `
-name: chart-x
-where:
-  city: kaunas
-  title: hmm
-image:
-  repository: gcr.io/v2-namespace/bye-world
-  tag: 1.1.0
-
-image2:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.2.0 
-
-`
-
-	myChart, err := testingStringToChart(chartVals)
-	if err != nil {
-		t.Errorf("chartutil.ReadValues error = %v", err)
-	}
-
-	fakeImpl := &fakeImplementer{
-		listReleasesResponse: []*release.Release{
-			{
-				Name:   "release-1",
-				Chart:  myChart,
-				Config: make(map[string]interface{}),
-			},
-		},
-	}
-	prov := NewProvider(fakeImpl, &fakeSender{})
-
-	tracked, _ := prov.TrackedImages()
-
-	if len(tracked) != 0 {
-		t.Errorf("didn't expect to find any tracked releases, found: %d", len(tracked))
-	}
-
-}
-
-func TestGetTrackedReleasesTotallyNonStandard(t *testing.T) {
-
-	chartVals := `
-name: chart-x
-where:
-  city: kaunas
-  title: hmm
-ihavemyownstandard:
-  repo: gcr.io/v2-namespace/bye-world
-  version: 1.1.0
-
-image2:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.2.0 
-
-keel:  
-  policy: all  
-  trigger: poll  
-  images:
-    - repository: ihavemyownstandard.repo
-      tag: ihavemyownstandard.version
-
-`
-
-	myChart, err := testingStringToChart(chartVals)
-	if err != nil {
-		t.Errorf("chartutil.ReadValues error = %v", err)
-	}
-
-	fakeImpl := &fakeImplementer{
-		listReleasesResponse: []*release.Release{
-			{
-				Name:   "release-1",
-				Chart:  myChart,
-				Config: make(map[string]interface{}),
-			},
-		},
-	}
-	prov := NewProvider(fakeImpl, &fakeSender{})
-
-	tracked, _ := prov.TrackedImages()
-
-	if tracked[0].Image.Remote() != "gcr.io/v2-namespace/bye-world:1.1.0" {
-		t.Errorf("unexpected image: %s", tracked[0].Image.Remote())
-	}
-}
-
-func TestGetTriggerFromConfig(t *testing.T) {
-	vals, err := testingConfigYaml(&KeelChartConfig{Trigger: types.TriggerTypePoll, Policy: "all"})
-	if err != nil {
-		t.Fatalf("Failed to load testdata: %s", err)
-	}
-
-	cfg, err := getKeelConfig(vals)
-	if err != nil {
-		t.Fatalf("failed to get image paths: %s", err)
-	}
-
-	if cfg.Trigger != types.TriggerTypePoll {
-		t.Errorf("invalid trigger: %s", cfg.Trigger)
-	}
-}
-
-func TestGetPolicyFromConfig(t *testing.T) {
-	vals, err := testingConfigYaml(&KeelChartConfig{Policy: "all"})
-	if err != nil {
-		t.Fatalf("Failed to load testdata: %s", err)
-	}
-
-	cfg, err := getKeelConfig(vals)
-	if err != nil {
-		t.Errorf("failed to get image paths: %s", err)
-	}
-
-	// if cfg.Policy != types.PolicyTypeAll {
-	if cfg.Plc.Name() != policy.SemverPolicyTypeAll.String() {
-		t.Errorf("invalid policy: %s", cfg.Policy)
-	}
-}
-
-func TestGetImagesFromConfig(t *testing.T) {
-	vals, err := testingConfigYaml(&KeelChartConfig{Policy: "all", Images: []ImageDetails{
-		{
-			RepositoryPath: "repopath",
-			TagPath:        "tagpath",
-		},
-	}})
-	if err != nil {
-		t.Fatalf("Failed to load testdata: %s", err)
-	}
-
-	cfg, err := getKeelConfig(vals)
-	if err != nil {
-		t.Errorf("failed to get image paths: %s", err)
-	}
-
-	if cfg.Images[0].RepositoryPath != "repopath" {
-		t.Errorf("invalid repo path: %s", cfg.Images[0].RepositoryPath)
-	}
-
-	if cfg.Images[0].TagPath != "tagpath" {
-		t.Errorf("invalid tag path: %s", cfg.Images[0].TagPath)
-	}
-}
-
-func TestUpdateRelease(t *testing.T) {
-
-	chartVals := `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
-image:
-  repository: karolisr/webhook-demo
-  tag: 0.0.10
-
-keel:  
-  policy: all  
-  trigger: poll  
-  images:
-    - repository: image.repository
-      tag: image.tag
-
-`
-
-	myChart, err := testingStringToChart(chartVals)
-	if err != nil {
-		t.Errorf("chartutil.ReadValues error = %v", err)
-	}
-
-	fakeImpl := &fakeImplementer{
-		listReleasesResponse: []*release.Release{
-			{
-				Name:   "release-1",
-				Chart:  myChart,
-				Config: make(map[string]interface{}),
-			},
-		},
-	}
-	provider := NewProvider(fakeImpl, &fakeSender{})
-
-	err = provider.processEvent(&types.Event{
-		Repository: types.Repository{
-			Name: "karolisr/webhook-demo",
-			Tag:  "0.0.11",
+func TestGetKeelConfigPolicyAndFilter(t *testing.T) {
+	vals, err := testingConfigYaml(&KeelChartConfig{
+		Policy:     "numerical:desc",
+		FilterTags: "^main-[a-f0-9]+-(?P<ts>[0-9]+)$",
+		Extract:    "$ts",
+		Trigger:    types.TriggerTypePoll,
+		Images: []ImageDetails{
+			{RepositoryPath: "image.repository", TagPath: "image.tag"},
 		},
 	})
 	if err != nil {
-		t.Errorf("failed to process event, error: %s", err)
+		t.Fatal(err)
 	}
-
-	// checking updated release
-	if fakeImpl.updatedChart != myChart {
-		t.Errorf("wrong chart updated")
-	}
-
-	if fakeImpl.updatedRlsName != "release-1" {
-		t.Errorf("unexpected release updated: %s", fakeImpl.updatedRlsName)
-	}
-}
-
-var pollingValues = `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
-image:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.1.0
-
-keel:  
-  policy: all  
-  trigger: poll 
-  pollSchedule: "@every 12m" 
-  images:
-    - repository: image.repository
-      tag: image.tag
-
-`
-
-func TestGetPollingSchedule(t *testing.T) {
-	vals, _ := chartutil.ReadValues([]byte(pollingValues))
 
 	cfg, err := getKeelConfig(vals)
 	if err != nil {
-		t.Errorf("failed to get config: %s", err)
+		t.Fatal(err)
 	}
-
-	if cfg.PollSchedule != "@every 12m" {
-		t.Errorf("unexpected polling schedule: %s", cfg.PollSchedule)
+	if cfg.Plc == nil || cfg.Plc.Type() != types.PolicyTypeNumerical {
+		t.Fatalf("policy = %#v", cfg.Plc)
+	}
+	if cfg.Filter == nil {
+		t.Fatal("expected filter")
+	}
+	if cfg.Trigger != types.TriggerTypePoll {
+		t.Fatalf("trigger = %v", cfg.Trigger)
 	}
 }
 
-func Test_getKeelConfig(t *testing.T) {
-
-	var valuesBasicStr = `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
-image:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.1.0
-
-keel:  
-  policy: all  
-  images:
-    - repository: image.repository
-      tag: image.tag
-
-`
-	valuesBasic, _ := chartutil.ReadValues([]byte(valuesBasicStr))
-
-	var valuesChannelsStr = `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
-image:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.1.0
-
+func TestGetKeelConfigRejectsLegacyMatchTag(t *testing.T) {
+	vals, err := chartutil.ReadValues([]byte(`
 keel:
-  policy: all
-  notificationChannels:
-    - chan1
-    - chan2
-  images:
-    - repository: image.repository
-      tag: image.tag
-
-`
-	valuesChannels, _ := chartutil.ReadValues([]byte(valuesChannelsStr))
-
-	var valuesPollStr = `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
-image:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.1.0
-
-keel:  
-  policy: major  
-  trigger: poll
-  pollSchedule: "@every 30m"
-  images:
-    - repository: image.repository
-      tag: image.tag
-      imagePullSecret: such-secret
-`
-	valuesPoll, _ := chartutil.ReadValues([]byte(valuesPollStr))
-
-	var valuesNoMatchPreReleaseStr = `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
-image:
-  repository: gcr.io/v2-namespace/hello-world
-  tag: 1.1.0
-
-keel:  
-  policy: all
-  matchPreRelease: false
-  images:
-    - repository: image.repository
-      tag: image.tag
-
-`
-	valuesNoMatchPreRelease, _ := chartutil.ReadValues([]byte(valuesNoMatchPreReleaseStr))
-
-	type args struct {
-		vals chartutil.Values
+  policy: semver:^1.0
+  matchTag: true
+`))
+	if err != nil {
+		t.Fatal(err)
 	}
-	tests := []struct {
-		name    string
-		args    args
-		want    *KeelChartConfig
-		wantErr bool
-	}{
-		{
-			name: "correct config",
-			args: args{vals: valuesBasic},
-			want: &KeelChartConfig{
-				Policy:          "all",
-				MatchPreRelease: true,
-				Trigger:         types.TriggerTypeDefault,
-				Images: []ImageDetails{
-					{RepositoryPath: "image.repository", TagPath: "image.tag"},
-				},
-				Plc: policy.NewSemverPolicy(policy.SemverPolicyTypeAll, true),
-			},
-		},
-		{
-			name: "custom notification channels",
-			args: args{vals: valuesChannels},
-			want: &KeelChartConfig{
-				Policy:               "all",
-				MatchPreRelease:      true,
-				Trigger:              types.TriggerTypeDefault,
-				NotificationChannels: []string{"chan1", "chan2"},
-				Images: []ImageDetails{
-					{RepositoryPath: "image.repository", TagPath: "image.tag"},
-				},
-				Plc: policy.NewSemverPolicy(policy.SemverPolicyTypeAll, true),
-			},
-		},
-		{
-			name: "correct polling config",
-			args: args{vals: valuesPoll},
-			want: &KeelChartConfig{
-				Policy:          "major",
-				MatchPreRelease: true,
-				Trigger:         types.TriggerTypePoll,
-				PollSchedule:    "@every 30m",
-				Images: []ImageDetails{
-					{RepositoryPath: "image.repository", TagPath: "image.tag", ImagePullSecret: "such-secret"},
-				},
-				Plc: policy.NewSemverPolicy(policy.SemverPolicyTypeMajor, true),
-			},
-		},
-		{
-			name: "disable matchPreRelease",
-			args: args{vals: valuesNoMatchPreRelease},
-			want: &KeelChartConfig{
-				Policy:          "all",
-				MatchPreRelease: false,
-				Trigger:         types.TriggerTypeDefault,
-				Images: []ImageDetails{
-					{RepositoryPath: "image.repository", TagPath: "image.tag"},
-				},
-				Plc: policy.NewSemverPolicy(policy.SemverPolicyTypeAll, false),
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := getKeelConfig(tt.args.vals)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getKeelConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getKeelConfig() = %v, want %v", got, tt.want)
-			}
-		})
+
+	if _, err := getKeelConfig(vals); err == nil {
+		t.Fatal("expected legacy matchTag to fail policy parsing")
 	}
 }
 
-func TestGetChartMatchTag(t *testing.T) {
-
-	chartVals := `
-name: al Rashid
-where:
-  city: Basrah
-  title: caliph
+func TestTrackedImages(t *testing.T) {
+	myChart, err := testingStringToChart(`
 image:
-  repository: gcr.io/v2-namespace/hello-world
+  repository: gcr.io/v2-namespace/bye-world
   tag: 1.1.0
-
-keel:  
-  policy: all  
+keel:
+  policy: semver:>=0.0.0
   trigger: poll
-  matchTag: true
   images:
     - repository: image.repository
       tag: image.tag
-
-`
-
-	myChart, err := testingStringToChart(chartVals)
+`)
 	if err != nil {
-		t.Errorf("chartutil.ReadValues error = %v", err)
+		t.Fatal(err)
 	}
 
-	fakeImpl := &fakeImplementer{
-		listReleasesResponse: []*release.Release{
-			{
-				Name:   "release-1",
-				Chart:  myChart,
-				Config: make(map[string]interface{}),
-			},
-		},
-	}
+	prov := NewProvider(&fakeImplementer{
+		listReleasesResponse: []*release.Release{{
+			Name:      "release-1",
+			Namespace: "default",
+			Chart:     myChart,
+			Config:    map[string]interface{}{},
+		}},
+	}, &fakeSender{})
 
-	releases, err := fakeImpl.ListReleases()
+	tracked, err := prov.TrackedImages()
 	if err != nil {
-		t.Fatalf("unexpected error: %s", err)
+		t.Fatal(err)
+	}
+	if len(tracked) != 1 {
+		t.Fatalf("len(tracked) = %d, want 1", len(tracked))
+	}
+	if tracked[0].Image.Remote() != "gcr.io/v2-namespace/bye-world:1.1.0" {
+		t.Fatalf("image = %s", tracked[0].Image.Remote())
+	}
+}
+
+func TestProcessEventUpdatesRelease(t *testing.T) {
+	myChart, err := testingStringToChart(`
+image:
+  repository: karolisr/webhook-demo
+  tag: 0.0.10
+keel:
+  policy: semver:>=0.0.0
+  trigger: poll
+  images:
+    - repository: image.repository
+      tag: image.tag
+`)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	policyFound := false
+	impl := &fakeImplementer{
+		listReleasesResponse: []*release.Release{{
+			Name:      "release-1",
+			Namespace: "default",
+			Chart:     myChart,
+			Config:    map[string]interface{}{},
+		}},
+	}
+	provider := NewProvider(impl, &fakeSender{})
 
-	for _, release := range releases {
-
-		vals, err := values(release.Chart, release.Config)
-		if err != nil {
-			t.Fatalf("failed to get values: %s", err)
-		}
-
-		cfg, err := getKeelConfig(vals)
-		if err != nil {
-			t.Errorf("failed to get image paths: %s", err)
-		}
-
-		if cfg.Plc.Name() == policy.SemverPolicyTypeAll.String() {
-			policyFound = true
-		}
-		if !cfg.MatchTag {
-			t.Errorf("expected to find 'matchTag' == true ")
-		}
+	err = provider.processEvent(&types.Event{
+		Repository: types.Repository{Name: "karolisr/webhook-demo", Tag: "0.0.11"},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if !policyFound {
-		t.Errorf("policy not found")
+	if impl.updatedChart != myChart {
+		t.Fatal("wrong chart updated")
+	}
+	if impl.updatedRlsName != "release-1" {
+		t.Fatalf("release = %s", impl.updatedRlsName)
+	}
+	if impl.updatedValues["image.tag"] != "0.0.11" {
+		t.Fatalf("updated values = %#v", impl.updatedValues)
 	}
 }

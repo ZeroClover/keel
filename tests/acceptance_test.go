@@ -79,7 +79,7 @@ func TestWebhooksSemverUpdate(t *testing.T) {
 			meta_v1.ObjectMeta{
 				Name:        "deployment-1",
 				Namespace:   testNamespace,
-				Labels:      map[string]string{types.KeelPolicyLabel: "all"},
+				Labels:      map[string]string{types.KeelPolicyLabel: "semver:>=0.0.0"},
 				Annotations: map[string]string{},
 			},
 			apps_v1.DeploymentSpec{
@@ -184,7 +184,7 @@ func TestWebhookHighIntegerUpdate(t *testing.T) {
 			meta_v1.ObjectMeta{
 				Name:        "deployment-1",
 				Namespace:   testNamespace,
-				Labels:      map[string]string{types.KeelPolicyLabel: "all"},
+				Labels:      map[string]string{types.KeelPolicyLabel: "semver:>=0.0.0"},
 				Annotations: map[string]string{},
 			},
 			apps_v1.DeploymentSpec{

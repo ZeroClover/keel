@@ -30,12 +30,11 @@ const KeelImagePullSecretAnnotation = "keel.sh/imagePullSecret"
 // changes
 const KeelTriggerLabel = "keel.sh/trigger"
 
-// KeelForceTagMatchLabel - label that checks whether tags match before force updating
-const KeelForceTagMatchLegacyLabel = "keel.sh/match-tag"
-const KeelForceTagMatchLabel = "keel.sh/matchTag"
+// KeelFilterTagsAnnotation - optional regex filter for candidate tags.
+const KeelFilterTagsAnnotation = "keel.sh/filterTags"
 
-// KeelMatchPreReleaseAnnotation - label or annotation to set pre-release matching for SemVer, defaults to true for backward compatibility
-const KeelMatchPreReleaseAnnotation = "keel.sh/matchPreRelease"
+// KeelExtractAnnotation - optional replacement template for filtered tags.
+const KeelExtractAnnotation = "keel.sh/extract"
 
 // KeelPollScheduleAnnotation - optional variable to setup custom schedule for polling, defaults to @every 10m
 const KeelPollScheduleAnnotation = "keel.sh/pollSchedule"
@@ -366,6 +365,6 @@ const (
 	PolicyTypeNone PolicyType = iota
 	PolicyTypeSemver
 	PolicyTypeForce
-	PolicyTypeGlob
-	PolicyTypeRegexp
+	PolicyTypeAlphabetical
+	PolicyTypeNumerical
 )

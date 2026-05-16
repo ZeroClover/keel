@@ -94,38 +94,39 @@ func (j *WatchRepositoryTagsJob) computeEvents(tags []string) ([]types.Event, er
 	allRelatedTrackedImages := getRelatedTrackedImages(j.details.trackedImage, trackedImages)
 
 	for _, trackedImage := range allRelatedTrackedImages {
-
-		filteredTags := tags
+		if trackedImage.Policy == nil {
+			continue
+		}
 
 		// The fact that they are related, does not mean they share the exact same Policy configuration, so wee need
 		// to calculate the tags here for each image.
-		filteredTags = trackedImage.Policy.Filter(tags)
-
-		for _, tag := range filteredTags {
-
-			update, err := trackedImage.Policy.ShouldUpdate(trackedImage.Image.Tag(), tag)
-			if err != nil {
-				continue
-			}
-			if update == false {
-				continue
-			}
-			// When using tags watcher we rely completely on tag names to deal with updates.
-			if trackedImage.Image.Tag() == tag {
-				break
-			}
-			if !exists(tag, events) {
-				event := types.Event{
-					Repository: types.Repository{
-						Name: trackedImage.Image.Repository(),
-						Tag:  tag,
-					},
-					TriggerName: types.TriggerTypePoll.String(),
-				}
-				events = append(events, event)
-				break
-			}
+		candidates := tags
+		if trackedImage.Filter != nil {
+			trackedImage.Filter.Apply(tags)
+			candidates = trackedImage.Filter.Items()
 		}
+
+		latestKey, err := trackedImage.Policy.Latest(candidates)
+		if err != nil {
+			continue
+		}
+
+		latest := latestKey
+		if trackedImage.Filter != nil {
+			latest = trackedImage.Filter.GetOriginalTag(latestKey)
+		}
+		if latest == "" || trackedImage.Image.Tag() == latest || exists(latest, events) {
+			continue
+		}
+
+		event := types.Event{
+			Repository: types.Repository{
+				Name: trackedImage.Image.Repository(),
+				Tag:  latest,
+			},
+			TriggerName: types.TriggerTypePoll.String(),
+		}
+		events = append(events, event)
 	}
 
 	log.WithFields(log.Fields{
@@ -148,7 +149,7 @@ func exists(tag string, events []types.Event) bool {
 func getRelatedTrackedImages(ours *types.TrackedImage, all []*types.TrackedImage) []*types.TrackedImage {
 	b := all[:0]
 	for _, x := range all {
-		if getImageIdentifier(x.Image, x.Policy.KeepTag()) == getImageIdentifier(ours.Image, ours.Policy.KeepTag()) {
+		if getImageIdentifier(x.Image) == getImageIdentifier(ours.Image) {
 			b = append(b, x)
 		}
 	}

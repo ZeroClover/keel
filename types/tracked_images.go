@@ -24,14 +24,19 @@ type TrackedImage struct {
 	// combined semver tags
 	Tags   []string `json:"tags"`
 	Policy Policy   `json:"policy"`
+	Filter Filter   `json:"filter"`
 }
 
 type Policy interface {
-	ShouldUpdate(current, new string) (bool, error)
 	Name() string
-	Filter(tags []string) []string
 	Type() PolicyType
-	KeepTag() bool
+	Latest(candidates []string) (string, error)
+}
+
+type Filter interface {
+	Apply(tags []string)
+	Items() []string
+	GetOriginalTag(key string) string
 }
 
 func (i TrackedImage) String() string {
