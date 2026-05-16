@@ -127,12 +127,16 @@
 
 ## 9. E2E 与回归
 
-- [ ] 9.1 启动 `docker compose up keel` + 本地 registry,执行计划文档 Phase 5 的 4 个场景:
+- [x] 9.1 启动 `docker compose up keel` + 本地 registry,执行计划文档 Phase 5 的 4 个场景:
    - 场景 1:SemVer `>=1.0.0-0` 包含 pre-release → 推送 `1.0.0-rc.2` 触发 update。
    - 场景 2:SemVer `>=1.0.0` 排除 pre-release → 推送 `1.1.0-rc.1` 忽略,推送 `1.1.0` 升级。
    - 场景 3:Numerical commit timestamp → 推送 `main-def-200` 触发 update。
    - 场景 4:Force 按 created time → 推送 `tag-1`,等 2 秒推送 `tag-2`,poll 后应选 `tag-2`。
-   - Blocked in this environment: `docker` command is not installed.
+   - Verified with Colima Kubernetes, `docker compose` Keel + `registry:2`, namespace `keel-e2e`, image prefix `keel-e2e-20260516-0853`:
+     - Scenario 1: `semver:>=1.0.0-0` updated `semver-prerelease` from `1.0.0-rc.1` to `1.0.0-rc.2`.
+     - Scenario 2: `semver:>=1.0.0` ignored `1.1.0-rc.1` for five 2-second polls, then updated `semver-stable` from `1.0.0` to `1.1.0`.
+     - Scenario 3: `numerical:desc` with `filterTags`/`extract` updated `numerical` from `main-abc-100` to `main-def-200`.
+     - Scenario 4: `force` updated `force-live` from `tag-1` to `tag-2`; local image config timestamps were `tag-1=2026-05-16T16:54:24+08:00`, `tag-2=2026-05-16T16:55:47+08:00`.
 - [x] 9.2 使用 httptest 或本地 registry 覆盖至少一个 GetCreatedTime 失败 case,确认失败 tag 排末尾且不进入 cache。
 
 ## 10. 关闭旧 issue 与最终验证
@@ -140,11 +144,20 @@
 - [x] 10.1 全仓库 `grep -rn "KeepTag\|matchTag\|MatchTag\|match-tag\|matchPreRelease\|MatchPreRelease" --include="*.go" .` 应为空(除 [[refactor-policy-flux-style]] 已加的 legacy-warner ERROR 日志字符串)。
 - [x] 10.2 全仓库 `grep -rn "ShouldUpdate" --include="*.go" .` 应为空。
 - [x] 10.3 `go test ./...` 全部通过。
-- [ ] 10.4 验证 4 个 OpenSpec Change 全部进入 archive 状态后,`openspec/specs/` 含 `notifications`、`image-update-pipeline`、`persistence`、`web-dashboard`、`image-policy`、`helm-chart-config`、`registry-client`、`image-poll-watcher`、`provider-update-decision` 共 9 个 capability。
-   - Pending final archive workflow: the first three Changes are archived and `openspec/specs/` currently contains the first 6 capabilities. This Change is still active, so `registry-client`, `image-poll-watcher`, and `provider-update-decision` are not yet in main specs.
+- [x] 10.4 验证 4 个 OpenSpec Change 全部进入 archive 状态后,`openspec/specs/` 含 `notifications`、`image-update-pipeline`、`persistence`、`web-dashboard`、`image-policy`、`helm-chart-config`、`registry-client`、`image-poll-watcher`、`provider-update-decision` 共 9 个 capability。
+   - Verified after archiving this Change: `openspec list --json` reports no active changes, and `openspec list --specs --json` reports all 9 required capabilities.
 
 ## 11. OpenSpec 工件验证
 
 - [x] 11.1 运行 `openspec validate refactor-watcher-and-force-policy --strict`,确认 4 个 artifact 均通过。
-- [ ] 11.2 准备 PR 标题:"refactor: registry GetCreatedTime, deterministic Force policy, single watcher path",PR 描述附 4 个手动验证场景结果。
-   - Pending manual E2E results from 9.1.
+- [x] 11.2 准备 PR 标题:"refactor: registry GetCreatedTime, deterministic Force policy, single watcher path",PR 描述附 4 个手动验证场景结果。
+   - PR title: `refactor: registry GetCreatedTime, deterministic Force policy, single watcher path`
+   - PR description verification section:
+     - `go build ./...`
+     - `go test ./...`
+     - `openspec validate refactor-watcher-and-force-policy --strict`
+     - Manual E2E with Colima Kubernetes, `docker compose` Keel + local `registry:2`:
+       - SemVer `>=1.0.0-0`: pushed `1.0.0-rc.2`; deployment updated from `1.0.0-rc.1` to `1.0.0-rc.2`.
+       - SemVer `>=1.0.0`: pushed `1.1.0-rc.1`; deployment remained at `1.0.0` for five 2-second polls; pushed `1.1.0`; deployment updated to `1.1.0`.
+       - Numerical timestamp: pushed `main-def-200`; deployment updated from `main-abc-100` to `main-def-200`.
+       - Force created time: pushed `tag-1`, later pushed `tag-2`; deployment updated from `tag-1` to `tag-2`.
