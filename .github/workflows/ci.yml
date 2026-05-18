@@ -49,66 +49,83 @@ jobs:
   docker:
     name: Build Docker Image
     needs: [test, lint-ui]
-    runs-on: ubuntu-latest
+    uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:
       contents: read
       packages: write
+    with:
+      output: image
+      push: ${{ github.event_name != 'pull_request' }}
+      platforms: linux/amd64,linux/arm64
+      distribute: true
+      setup-qemu: false
+      runner: |
+        default=ubuntu-24.04
+        linux/arm64=ubuntu-24.04-arm
+      cache: true
+      cache-scope: docker
+      cache-mode: max
+      sign: "false"
+      sbom: false
+      set-meta-labels: true
+      meta-images: ghcr.io/${{ github.repository }}
+      meta-tags: |
+        type=ref,event=branch
+        type=ref,event=tag
+        type=semver,pattern={{version}}
+        type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  verify-docker-manifest:
+    name: Verify Docker Manifest
+    needs: docker
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+      - name: Verify published tags
+        shell: bash
+        env:
+          META_JSON: ${{ needs.docker.outputs.meta-json }}
+        run: |
+          set -euo pipefail
 
-      - name: Build and push
-        if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          mapfile -t tags < <(jq -r '.tags[]' <<<"$META_JSON")
+          if [ "${#tags[@]}" -eq 0 ]; then
+            echo "No Docker tags were produced by metadata generation"
+            exit 1
+          fi
 
-      - name: Build for PR validation
-        if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          for tag in "${tags[@]}"; do
+            echo "Inspecting $tag"
+            manifest="$(docker buildx imagetools inspect "$tag" --format '{{json .Manifest}}')"
+            jq -e '
+              any(.manifests[]?; .platform.os == "linux" and .platform.architecture == "amd64")
+            ' <<<"$manifest" >/dev/null
+            jq -e '
+              any(.manifests[]?; .platform.os == "linux" and .platform.architecture == "arm64")
+            ' <<<"$manifest" >/dev/null
+          done
 
   chart-release:
     name: Release Helm Chart
-    needs: docker
+    needs: verify-docker-manifest
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
