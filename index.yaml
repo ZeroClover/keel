@@ -2,6 +2,23 @@ apiVersion: v1
 entries:
   keel:
   - apiVersion: v1
+    appVersion: 0.0.3
+    created: "2026-05-18T10:24:56.421740501Z"
+    description: Open source tool for automating Kubernetes deployment updates.
+    digest: 3262677d929b79d74a82be7d2a6b8d8163390b812aba869c4deb2808bbd5c8d0
+    home: https://github.com/ZeroClover/keel
+    icon: https://raw.githubusercontent.com/ZeroClover/keel/master/static/keel-logo.png
+    keywords:
+    - kubernetes deployment
+    - helm release
+    - continuous deployment
+    name: keel
+    sources:
+    - https://github.com/ZeroClover/keel
+    urls:
+    - https://github.com/ZeroClover/keel/releases/download/keel-0.0.3/keel-0.0.3.tgz
+    version: 0.0.3
+  - apiVersion: v1
     appVersion: 0.0.1
     created: "2026-05-18T04:36:28.398989852Z"
     description: Open source tool for automating Kubernetes deployment updates.
@@ -18,4 +35,4 @@ entries:
     urls:
     - https://github.com/ZeroClover/keel/releases/download/keel-0.0.1/keel-0.0.1.tgz
     version: 0.0.1
-generated: "2026-05-18T04:36:28.398999857Z"
+generated: "2026-05-18T10:24:56.421747371Z"
