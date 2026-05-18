@@ -10,7 +10,7 @@ keywords:
 - kubernetes deployment
 - helm release
 - continuous deployment
-home: https://github.com/keel-hq/keel
+home: https://github.com/ZeroClover/keel
 sources:
-- https://github.com/keel-hq/keel
-icon: https://raw.githubusercontent.com/keel-hq/keel/master/static/keel-logo.png
+- https://github.com/ZeroClover/keel
+icon: https://raw.githubusercontent.com/ZeroClover/keel/master/static/keel-logo.png
