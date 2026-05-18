@@ -60,7 +60,7 @@ Prerequisites:
 You need to add this Chart repo to Helm:
 
 ```bash
-helm repo add keel https://keel-hq.github.io/keel/ 
+helm repo add keel https://zeroclover.github.io/keel/ 
 helm repo update
 ```
 
@@ -89,7 +89,7 @@ resource "helm_release" "keel" {
   provider   = helm.helm
   name       = "keel"
   namespace  = "keel"
-  repository = "https://keel-hq.github.io/keel"
+  repository = "https://zeroclover.github.io/keel"
   chart      = "keel"
   version    = "v1.0.4"
 
