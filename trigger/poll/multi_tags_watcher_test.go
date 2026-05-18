@@ -309,6 +309,34 @@ func TestForcePolicyWithFilterUsesOriginalTagsForCreatedTime(t *testing.T) {
 	}
 }
 
+func TestForcePolicyDefaultSkipsCreatedTime(t *testing.T) {
+	frc := &fakeRegistryClient{
+		digestByTag: map[string]string{
+			"tag-A": "sha256:a",
+			"tag-B": "sha256:b",
+			"tag-C": "sha256:c",
+		},
+		createdByTag: map[string]time.Time{
+			"tag-A": time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			"tag-B": time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+			"tag-C": time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	fp, job, _ := tagsJobWithCache("current", []string{"tag-A", "tag-B", "tag-C"}, policy.NewForce(), nil, frc, newCreatedTimeCache())
+
+	job.Run()
+
+	if len(fp.submitted) != 1 {
+		t.Fatalf("submitted = %d, want 1", len(fp.submitted))
+	}
+	if fp.submitted[0].Repository.Tag != "tag-A" {
+		t.Fatalf("tag = %s, want tag-A (first in registry order, no created sort)", fp.submitted[0].Repository.Tag)
+	}
+	if len(frc.createdCalls) != 0 {
+		t.Fatalf("created time calls = %#v, want none on default force policy", frc.createdCalls)
+	}
+}
+
 func TestSemverPolicyBypassesCreatedTime(t *testing.T) {
 	fp, job := tagsJob("1.0.0", []string{"1.0.0", "1.1.0"}, mustSemVerPolicy(">=0.0.0"), nil, &fakeRegistryClient{
 		digestByTag: map[string]string{
@@ -335,7 +363,15 @@ func TestSemverPolicyBypassesCreatedTime(t *testing.T) {
 }
 
 func forceJob(currentTag string, availableTags []string, filter policy.Filter, frc *fakeRegistryClient, cache *createdTimeCache) (*fakeProvider, *WatchRepositoryTagsJob, *types.TrackedImage) {
-	return tagsJobWithCache(currentTag, availableTags, policy.NewForce(), filter, frc, cache)
+	return tagsJobWithCache(currentTag, availableTags, mustForcePolicy("created"), filter, frc, cache)
+}
+
+func mustForcePolicy(option string) *policy.Force {
+	plc, err := policy.NewForceWithOption(option)
+	if err != nil {
+		panic(err)
+	}
+	return plc
 }
 
 func tagsJob(currentTag string, availableTags []string, plc policy.Policy, filter policy.Filter, frc *fakeRegistryClient) (*fakeProvider, *WatchRepositoryTagsJob) {

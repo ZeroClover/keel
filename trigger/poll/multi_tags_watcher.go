@@ -110,7 +110,10 @@ func (j *WatchRepositoryTagsJob) computeEvents(tags []string) ([]types.Event, er
 		filter := trackedImage.Filter
 		candidates := tags
 		if trackedImage.Policy.Type() == types.PolicyTypeForce {
-			candidates = sortByCreatedTime(originalTagsForForce(tags, filter), trackedImage.Image, j.registryClient, j.cache)
+			candidates = originalTagsForForce(tags, filter)
+			if forcePolicySortsByCreated(trackedImage.Policy) {
+				candidates = sortByCreatedTime(candidates, trackedImage.Image, j.registryClient, j.cache)
+			}
 		} else if filter != nil {
 			filter.Apply(tags)
 			candidates = filter.Items()
@@ -150,6 +153,19 @@ func (j *WatchRepositoryTagsJob) computeEvents(tags []string) ([]types.Event, er
 	}).Debug("trigger.poll.WatchRepositoryTagsJob: events: ", events)
 
 	return events, nil
+}
+
+// forcePolicySortsByCreated reports whether the supplied force policy has
+// opted into sorting candidate tags by their image config `created` time.
+// Implementations expose this via a `SortByCreated() bool` method; policies
+// that do not implement it default to off, preserving the fast path that
+// avoids per-tag manifest API calls on large repositories.
+func forcePolicySortsByCreated(plc types.Policy) bool {
+	aware, ok := plc.(interface{ SortByCreated() bool })
+	if !ok {
+		return false
+	}
+	return aware.SortByCreated()
 }
 
 func originalTagsForForce(tags []string, filter types.Filter) []string {

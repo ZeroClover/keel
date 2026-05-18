@@ -48,6 +48,11 @@ func TestGetPolicyFromLabelsOrAnnotations(t *testing.T) {
 			wantType:    types.PolicyTypeForce,
 		},
 		{
+			name:        "force sort by created",
+			annotations: map[string]string{types.KeelPolicyLabel: "force:created"},
+			wantType:    types.PolicyTypeForce,
+		},
+		{
 			name: "filter",
 			annotations: map[string]string{
 				types.KeelPolicyLabel:          "numerical:desc",

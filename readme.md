@@ -174,7 +174,8 @@ No additional configuration is required. Enabling continuous delivery for your w
 | `semver:<constraint>` | `semver:>=1.0.0` | Selects the highest tag matching a Masterminds semver v3 constraint. Use `>=1.0.0-0` to include pre-releases. |
 | `alphabetical[:asc\|desc]` | `alphabetical:desc` | Selects the lexicographically lowest (`asc`, default) or highest (`desc`) tag. |
 | `numerical[:asc\|desc]` | `numerical:desc` | Selects the numerically lowest (`asc`, default) or highest (`desc`) extracted tag. Non-numeric candidates are errors. |
-| `force` | `force` | Polling sorts matching tags by image config `created` time descending, then selects the newest candidate. Webhooks and pubsub treat the incoming tag as the candidate. |
+| `force` | `force` | Polling picks the first matching tag in the order returned by the registry (registries typically list newest first). Webhooks and pubsub treat the incoming tag as the candidate. |
+| `force:created` | `force:created` | Same as `force`, but polling additionally fetches each tag's image config `created` time and sorts descending before selecting. Slow / rate-limited on large repositories — opt in only when registry tag ordering is not reliable. |
 
 Use `keel.sh/filterTags` to keep only tags matching an RE2 regular expression, and `keel.sh/extract` to pass a capture group to the policy:
 
@@ -185,7 +186,7 @@ annotations:
   keel.sh/extract: "$ts"
 ```
 
-Force policy depends on registry image metadata when polling: tags with missing or unreadable `created` timestamps are treated as older than tags with valid timestamps. Prefer immutable tags with `semver`, `alphabetical`, or `numerical` policies for routine delivery, and use registry webhooks or a GitOps controller to publish explicit immutable updates instead of relying on mutable tags such as `latest`.
+The default `force` policy trusts the order returned by the registry's tag listing API and does not issue per-tag manifest calls, which keeps polling cheap on large repositories. When the registry does not order tags newest-first (or you don't trust the order), opt into `force:created` so Keel fetches each tag's image config `created` time and sorts descending — tags with missing or unreadable timestamps are treated as older than tags with valid timestamps. Expect noticeably slower polling and possible rate limiting on repositories with many tags. Prefer immutable tags with `semver`, `alphabetical`, or `numerical` policies for routine delivery, and use registry webhooks or a GitOps controller to publish explicit immutable updates instead of relying on mutable tags such as `latest`.
 
 #### Upgrading from older policies
 

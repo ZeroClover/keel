@@ -120,8 +120,8 @@ func parsePolicy(policyName string) (Policy, error) {
 			return nil, fmt.Errorf("semver policy requires a constraint")
 		}
 		return NewSemVer(constraint)
-	case lower == "force":
-		return NewForce(), nil
+	case lower == "force" || strings.HasPrefix(lower, "force:"):
+		return NewForceWithOption(policyOrder(lower, "force"))
 	case lower == "alphabetical" || strings.HasPrefix(lower, "alphabetical:"):
 		return NewAlphabetical(policyOrder(lower, "alphabetical"))
 	case lower == "numerical" || strings.HasPrefix(lower, "numerical:"):

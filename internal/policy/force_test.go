@@ -26,3 +26,22 @@ func TestForceLatest(t *testing.T) {
 		})
 	}
 }
+
+func TestForceSortByCreated(t *testing.T) {
+	plc := NewForce()
+	if plc.SortByCreated() {
+		t.Fatalf("default Force policy should not sort by created time")
+	}
+
+	created, err := NewForceWithOption("created")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !created.SortByCreated() {
+		t.Fatalf("force:created policy should sort by created time")
+	}
+
+	if _, err := NewForceWithOption("bogus"); err == nil {
+		t.Fatalf("expected error for unknown force option")
+	}
+}
