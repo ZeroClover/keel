@@ -8,8 +8,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/keel-hq/keel/types"
 
-	// importing sqlite driver
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	_ "modernc.org/sqlite"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -70,7 +69,13 @@ func connect(ctx context.Context, opts Opts) (*gorm.DB, error) {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("sql store startup deadline exceeded")
 		default:
-			db, err := gorm.Open(opts.DatabaseType, opts.URI)
+			var db *gorm.DB
+			var err error
+			if opts.DatabaseType == "sqlite3" {
+				db, err = gorm.Open("sqlite3", "sqlite", opts.URI)
+			} else {
+				db, err = gorm.Open(opts.DatabaseType, opts.URI)
+			}
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				log.WithFields(log.Fields{

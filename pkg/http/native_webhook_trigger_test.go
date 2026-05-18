@@ -15,8 +15,6 @@ import (
 
 	"net/http/httptest"
 	"testing"
-
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
 func NewTestingUtils() (*sql.SQLStore, func()) {

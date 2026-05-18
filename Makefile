@@ -2,12 +2,10 @@ JOBDATE		?= $(shell date -u +%Y-%m-%dT%H%M%SZ)
 GIT_REVISION	= $(shell git rev-parse --short HEAD)
 VERSION		?= $(shell git describe --tags --abbrev=0)
 
-LDFLAGS		+= -linkmode external -extldflags -static
 LDFLAGS		+= -X github.com/keel-hq/keel/version.Version=$(VERSION)
 LDFLAGS		+= -X github.com/keel-hq/keel/version.Revision=$(GIT_REVISION)
 LDFLAGS		+= -X github.com/keel-hq/keel/version.BuildDate=$(JOBDATE)
 
-ARMFLAGS		+= -a -v
 ARMFLAGS		+= -X github.com/keel-hq/keel/version.Version=$(VERSION)
 ARMFLAGS		+= -X github.com/keel-hq/keel/version.Revision=$(GIT_REVISION)
 ARMFLAGS		+= -X github.com/keel-hq/keel/version.BuildDate=$(JOBDATE)
@@ -25,11 +23,11 @@ compress:
 build-binaries:
 	go get github.com/mitchellh/gox
 	@echo "++ Building keel binaries"
-	cd cmd/keel && CC=arm-linux-gnueabi-gcc gox -verbose -output="release/{{.Dir}}-{{.OS}}-{{.Arch}}" \
+	cd cmd/keel && CGO_ENABLED=0 gox -verbose -output="release/{{.Dir}}-{{.OS}}-{{.Arch}}" \
 		-ldflags "$(LDFLAGS)" -osarch="linux/arm"
 
 build-arm:
-	cd cmd/keel && env CC=arm-linux-gnueabihf-gcc CGO_ENABLED=1 GOARCH=arm GOOS=linux go build -ldflags="$(ARMFLAGS)" -o release/keel-linux-arm
+	cd cmd/keel && env CGO_ENABLED=0 GOARCH=arm GOOS=linux go build -ldflags="$(ARMFLAGS)" -o release/keel-linux-arm
 	# disabling for now 64bit builds
 	# cd cmd/keel && env GOARCH=arm64 GOOS=linux go build -ldflags="$(ARMFLAGS)" -o release/keel-linux-aarc64
 
@@ -57,7 +55,7 @@ test:
 
 build:
 	@echo "++ Building keel"
-	GOOS=linux cd cmd/keel && go build -a -tags netgo -ldflags "$(LDFLAGS) -w -s" -o keel .
+	cd cmd/keel && CGO_ENABLED=0 GOOS=linux go build -a -tags netgo -ldflags "$(LDFLAGS) -w -s" -o keel .
 
 install:
 	@echo "++ Installing keel"
