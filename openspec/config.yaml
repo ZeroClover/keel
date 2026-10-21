@@ -8,6 +8,12 @@ schema: spec-driven
 #     Tech stack: TypeScript, React, Node.js
 #     We use conventional commits
 #     Domain: e-commerce platform
+context: |
+  Keel: Go Kubernetes operator that updates workloads and Helm 3 releases when
+  registry tags satisfy a resource's policy; Vue 2 dashboard in ui/.
+  Read AGENTS.md first: it lists the core constraints and indexes the topic
+  guides in docs/agents/. Check docs/agents/known-issues.md for places where
+  code and these specs currently disagree.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

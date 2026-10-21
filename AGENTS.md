@@ -1,31 +1,38 @@
-## Commit & Pull Request Guidelines
-Follow the lightweight conventional pattern seen in history (`fix:`, `feat:`, `chore:`) with concise, imperative summaries and optional scope (e.g., `fix: handle streaming fallback`). Reference related issues in parentheses `(#1234)` when helpful. PRs should describe the change, attach screenshots or GIFs for UI work, and list verification commands. Request review after lint/tests pass and diffs are free of secrets.
+# Keel agent guide
 
-## Security & Configuration Tips
-Never commit API keys or other credentials. Keel reads runtime configuration from environment variables (most names live in `constants/constants.go`), exposed through `chart/keel/values.yaml`; keep secret values out of those defaults. In `ui/`, only `.env.local` and `.env.*.local` are git-ignored - `ui/.env` is committed, so it must not hold secrets.
+Keel is a Kubernetes operator that watches container registries and updates Deployments, StatefulSets, DaemonSets, CronJobs and Helm 3 releases when a new image tag satisfies the resource's policy. This repository is the ZeroClover/keel fork (Go module path is still `github.com/keel-hq/keel`): one Go binary (`cmd/keel`), a Vue 2 dashboard (`ui/`), the image `ghcr.io/zeroclover/keel`, and the Helm chart in `chart/keel`.
 
-## Overthinking and excessive thoroughness
+## Core constraints
 
-When you're deciding how to approach a problem, choose an approach and commit to it. Avoid revisiting decisions unless you encounter new information that directly contradicts your reasoning. If you're weighing two approaches, pick one and see it through. You can always course-correct later if the chosen approach fails.
+- **Poll events skip the policy check.** Providers apply an event whose `TriggerName` is `"poll"` without calling `policy.AllowsTag`, because the poll watcher already selected the tag with the resource's policy. Every other trigger (webhooks, Pub/Sub, empty or unknown names) must pass the target resource's policy and tag filter. Any change to triggers, `types.Event`, or the provider update path has to keep this split; see `docs/agents/architecture.md` → Trust model.
+- **Builds are CGO-free.** SQLite comes from the pure-Go `modernc.org/sqlite` driver and every build path sets `CGO_ENABLED=0`. Don't add dependencies that need cgo.
+- **Behavior changes go through OpenSpec.** `openspec/specs/` holds the intended behavior of each capability. For a change to user-visible behavior, create a change with `/opsx:propose` (Codex: `$openspec-propose`), implement it with `/opsx:apply`, and archive it when done. Where code and spec currently disagree, `docs/agents/known-issues.md` records it; don't quietly change either side to match the other.
+- **Credentials stay out of git and logs.** Registry passwords, tokens and webhook URLs reach Keel through env vars or Kubernetes Secrets. `ui/.env` is committed; only `ui/.env.local` and `ui/.env.*.local` are git-ignored.
+- **Legacy upstream files are not maintained.** `docs/agents/development.md` → Legacy files lists them (Azure/PowerShell/compose builds, extra Dockerfiles, `deployment/`, the root `values.yaml`, …). Don't update them to follow a change, and don't read them as a description of current behavior.
+- **Commits** use Conventional Commits in English: `feat`, `fix`, `refactor`, `docs`, `chore`, `ci`, with an optional scope such as `chart`, `policy`, `docker` or `release`.
 
-Avoid over-engineering. Only make changes that are directly requested or clearly necessary. Keep solutions simple and focused:
+## Working rules
 
-- Scope: Don't add features, refactor code, or make "improvements" beyond what was asked. A bug fix doesn't need surrounding code cleaned up. A simple feature doesn't need extra configurability.
+- Keep changes to what was asked: no drive-by refactors, no speculative options or abstractions, no comments or docstrings on code you didn't change. Validate at system boundaries (webhook payloads, annotations, env vars) and trust internal code.
+- Implement the general logic rather than special-casing test inputs. If a test or the task itself looks wrong, say so instead of working around it.
+- Read the relevant code before making claims about how it behaves.
+- Remove temporary files and scripts you created before finishing.
 
-- Documentation: Don't add docstrings, comments, or type annotations to code you didn't change. Only add comments where the logic isn't self-evident.
+## Verification
 
-- Defensive coding: Don't add error handling, fallbacks, or validation for scenarios that can't happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs).
+CI runs `make test` (Go unit tests; some registry tests call Docker Hub and Quay and fail offline) and `cd ui && yarn && yarn run lint --no-fix`. Run the one that covers your change before finishing; `go test ./<pkg>/...` is fine while iterating. Build, run and E2E commands are in `docs/agents/development.md`.
 
-- Abstractions: Don't create helpers, utilities, or abstractions for one-time operations. Don't design for hypothetical future requirements. The right amount of complexity is the minimum needed for the current task.
+## Where to read next
 
-## Reduce file creation in agentic coding
+Open the file that matches the task. Each one cites its source files, so re-check against the code when a detail matters.
 
-If you create any temporary new files, scripts, or helper files for iteration, clean up these files by removing them at the end of the task.
-
-## Avoid focusing on passing tests and hard-coding
-
-Implement the actual logic so the solution works for all valid inputs, not just the test cases; don't hard-code values or special-case test inputs. Tests verify correctness, they don't define the solution.
-
-If the task is infeasible or a test is wrong, say so instead of working around it.
-
-Read the relevant code before answering questions about it or making claims about how it behaves; if the user names a file, open it first.
+| File | Read when |
+|---|---|
+| `docs/agents/architecture.md` | Orienting; startup wiring; how an event flows from trigger to provider; directory map |
+| `docs/agents/policies.md` | Policies, tag filters, `keel.sh/*` annotations, Helm `keel:` values, poll scheduling |
+| `docs/agents/configuration.md` | Env vars and flags, Helm chart values, HTTP routes and auth, persistence |
+| `docs/agents/extending.md` | Adding a notification sender, webhook trigger, provider or credentials helper |
+| `docs/agents/development.md` | Build, tests, CI, release, chart publishing, OpenSpec workflow, legacy files |
+| `docs/agents/ui.md` | Working in `ui/` |
+| `docs/agents/known-issues.md` | Before changing behavior, or when code, specs and docs disagree |
+| `openspec/specs/<capability>/spec.md` | Normative requirements for one capability |
