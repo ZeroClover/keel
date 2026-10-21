@@ -1,7 +1,7 @@
 # image-policy Specification
 
 ## Purpose
-TBD - created by archiving change refactor-policy-flux-style. Update Purpose after archive.
+Define how a resource declares its update policy and tag filter, which policy types exist, and how a policy selects the latest tag from candidates.
 ## Requirements
 ### Requirement: Annotation Schema
 
@@ -18,7 +18,7 @@ Keel SHALL recognise the following annotation keys on Kubernetes resources and H
 - `semver:<constraint>` where `<constraint>` is parsable by `github.com/Masterminds/semver/v3`.
 - `alphabetical` or `alphabetical:asc` or `alphabetical:desc`.
 - `numerical` or `numerical:asc` or `numerical:desc`.
-- `force`.
+- `force` or `force:created`. Any other `force:<option>` MUST be rejected.
 - `never` (equivalent to no policy).
 
 The default order for `alphabetical` and `numerical` MUST be `asc` when no suffix is provided, matching Flux `NewAlphabetical("")` and `NewNumerical("")` behaviour.
@@ -170,6 +170,19 @@ The Go module MUST depend on `github.com/Masterminds/semver/v3` (not v1). All in
 ### Requirement: Force Policy Trivial Selector
 
 The `force` policy implementation SHALL select the first element of the candidates list as the latest. Sorting of the candidate list (e.g., by image created time) is the caller's responsibility; the Force policy MUST NOT itself fetch metadata.
+
+The `force:created` value SHALL produce the same Force policy with `SortByCreated()` returning `true`; plain `force` MUST return `false`. The flag only tells the poll watcher to sort candidates by image created time before calling `Latest` (see the image-poll-watcher specification).
+
+#### Scenario: Created-time sorting is opt-in
+
+- **WHEN** `keel.sh/policy` is `force`
+- **THEN** the parsed policy's `SortByCreated()` MUST return `false`
+- **AND** when `keel.sh/policy` is `force:created`, `SortByCreated()` MUST return `true`
+
+#### Scenario: Unknown force option
+
+- **WHEN** `keel.sh/policy` is `force:newest`
+- **THEN** policy parsing MUST return an error
 
 #### Scenario: Empty candidate list
 

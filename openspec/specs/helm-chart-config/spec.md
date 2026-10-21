@@ -1,7 +1,7 @@
 # helm-chart-config Specification
 
 ## Purpose
-TBD - created by archiving change refactor-policy-flux-style. Update Purpose after archive.
+Define the `keel:` block that the Helm 3 provider reads from release values, and how it maps onto the same policy and tag filter as Kubernetes annotations.
 ## Requirements
 ### Requirement: KeelChartConfig Field Set
 

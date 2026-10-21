@@ -1,7 +1,7 @@
 # image-update-pipeline Specification
 
 ## Purpose
-TBD - created by archiving change remove-approvals-system. Update Purpose after archive.
+Define the path from a qualifying image event to an updated resource, with no approval stage, and the provider and HTTP surface that path exposes.
 ## Requirements
 ### Requirement: Pipeline Has No Approval Stage
 
@@ -18,7 +18,7 @@ Keel SHALL process every accepted image-update event end-to-end without any manu
 
 - **WHEN** the poll trigger discovers a newer tag in the registry that satisfies the deployment's policy
 - **THEN** Keel MUST submit the event to the provider, which patches the resource without intermediate approval
-- **AND** the audit log MUST record only one entry of action `deployment-update` (no `approved`/`rejected` entries)
+- **AND** the audit log MUST record only one entry of action `deployment update` (no `approved`/`rejected` entries)
 
 ### Requirement: Approval Annotations Are Silently Ignored
 
@@ -34,7 +34,7 @@ The annotations `keel.sh/approvals` and `keel.sh/approvalDeadline` SHALL have no
 
 Provider constructors SHALL NOT accept an `approvals.Manager` parameter. The constructor signatures MUST be:
 
-- `kubernetes.NewProvider(impl Implementer, sender notification.Sender, grc *k8s.GenericResourceCache) (*Provider, error)`
+- `kubernetes.NewProvider(impl Implementer, sender notification.Sender, cache GenericResourceCache) (*Provider, error)` (where `GenericResourceCache` is the resource-cache interface declared in `provider/kubernetes`)
 - `helm3.NewProvider(impl Implementer, sender notification.Sender) *Provider`
 - `provider.New(providers []Provider) *DefaultProviders`
 

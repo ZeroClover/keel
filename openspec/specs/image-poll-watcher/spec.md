@@ -1,7 +1,7 @@
 # image-poll-watcher Specification
 
 ## Purpose
-TBD - created by archiving change refactor-watcher-and-force-policy. Update Purpose after archive.
+Define how the poll trigger watches registries for tracked images, selects the next tag with each image's policy, and emits poll events.
 ## Requirements
 ### Requirement: Single Watcher Path
 
@@ -29,14 +29,14 @@ Poll trigger SHALL run exactly one watcher job type per tracked image: `WatchRep
 
 1. If a `Filter` is configured: call `filter.Apply(tags)`; let `candidates = filter.Items()` for non-Force policies.
 2. Otherwise: let `candidates = tags`.
-3. If the tracked image's policy is `Force`: build the candidate set from original tag names (not extracted keys), then sort those original tags by image-created-time descending using `registry.GetCreatedTime`. Tags whose created time cannot be fetched MUST be sorted to the tail of the list and MUST NOT be cached as zero-time results.
+3. If the tracked image's policy is `Force`: build the candidate set from original tag names that pass the filter (not extracted keys). Only when the policy is `force:created` (`SortByCreated()` is true), sort those original tags by image-created-time descending using `registry.GetCreatedTime`; plain `force` keeps the registry's tag-list order. Tags whose created time cannot be fetched MUST be sorted to the tail of the list and MUST NOT be cached as zero-time results.
 4. Call `latestKey, err = policy.Latest(candidates)`. On error, skip the tracked image (log at debug level).
 5. Let `latestTag = filter.GetOriginalTag(latestKey)` if a filter is configured on a non-Force policy, else `latestTag = latestKey`.
 6. If `latestTag != trackedImage.Image.Tag()`, emit a `types.Event` with the new tag.
 
 #### Scenario: Force policy with created-time sort
 
-- **GIVEN** policy `force`, no filter, candidate tags `["tag-A", "tag-B", "tag-C"]`
+- **GIVEN** policy `force:created`, no filter, candidate tags `["tag-A", "tag-B", "tag-C"]`
 - **AND** `GetCreatedTime` returns: `tag-A=2024-01-01`, `tag-B=2024-03-01`, `tag-C=2024-02-01`
 - **WHEN** `computeEvents` runs
 - **THEN** the sorted candidate list MUST be `["tag-B", "tag-C", "tag-A"]`
@@ -45,7 +45,7 @@ Poll trigger SHALL run exactly one watcher job type per tracked image: `WatchRep
 
 #### Scenario: Force policy with missing created-time
 
-- **GIVEN** policy `force`, candidates `["a", "b", "c"]`
+- **GIVEN** policy `force:created`, candidates `["a", "b", "c"]`
 - **AND** `GetCreatedTime` returns valid time for `a` (2024-01-01) and `b` (2024-02-01) but errors for `c`
 - **WHEN** `computeEvents` runs
 - **THEN** the sorted candidate list MUST be `["b", "a", "c"]` (c at tail)
@@ -53,7 +53,7 @@ Poll trigger SHALL run exactly one watcher job type per tracked image: `WatchRep
 
 #### Scenario: Force policy with equal created-time uses deterministic tie-breaker
 
-- **GIVEN** policy `force`, candidates `["b", "a", "c"]`
+- **GIVEN** policy `force:created`, candidates `["b", "a", "c"]`
 - **AND** `GetCreatedTime` returns the same timestamp for `a` and `b`, and a newer timestamp for `c`
 - **WHEN** `computeEvents` runs
 - **THEN** the sorted candidate list MUST put `c` before `a` and `b`
@@ -61,11 +61,18 @@ Poll trigger SHALL run exactly one watcher job type per tracked image: `WatchRep
 
 #### Scenario: Force policy with filter and extract uses original tags
 
-- **GIVEN** policy `force`, `filterTags="^release-(?P<n>[0-9]+)$"`, `extract="$n"`, and tags `["release-1", "release-2", "dev-3"]`
+- **GIVEN** policy `force:created`, `filterTags="^release-(?P<n>[0-9]+)$"`, `extract="$n"`, and tags `["release-1", "release-2", "dev-3"]`
 - **AND** `GetCreatedTime` returns `release-1=2024-01-01` and `release-2=2024-02-01`
 - **WHEN** `computeEvents` runs
 - **THEN** created-time lookup MUST be invoked for original tags `release-1` and `release-2`, not for extracted keys `"1"` or `"2"`
 - **AND** the emitted event MUST carry `release-2`
+
+#### Scenario: Plain force keeps registry order
+
+- **GIVEN** policy `force`, no filter, and the registry lists tags `["tag-A", "tag-B", "tag-C"]`
+- **WHEN** `computeEvents` runs
+- **THEN** no call to `GetCreatedTime` MUST occur
+- **AND** the emitted event MUST carry `tag-A`
 
 #### Scenario: Non-force policy bypasses created-time fetch
 
@@ -78,14 +85,14 @@ Poll trigger SHALL run exactly one watcher job type per tracked image: `WatchRep
 
 Watcher code SHALL memoise successful `GetCreatedTime` results by manifest digest. The memoization MUST:
 
-- Use `(registry, repository, manifestDigest)` as the key.
+- Use `(scheme, registry, repository, manifestDigest)` as the key, rendered as `<scheme>://<registry>/<repository>@<digest>`.
 - Store only results where `GetCreatedTime` returned `nil` error and a non-zero `time.Time`.
 - Treat network errors, HTTP errors, JSON parse errors, and missing `.created` as cache misses on future polls.
 - Be private to the watcher implementation.
 
 #### Scenario: Cache hit avoids created-time fetch
 
-- **GIVEN** the cache contains `key="docker.io/library/nginx@sha256:abc" -> t1`
+- **GIVEN** the cache contains `key="https://registry.example.com/team/app@sha256:abc" -> t1`
 - **WHEN** the watcher checks `cache.Get(key)`
 - **THEN** the watcher MUST receive `(t1, true)` without invoking `GetCreatedTime`
 

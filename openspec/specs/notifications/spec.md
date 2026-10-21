@@ -1,7 +1,7 @@
 # notifications Specification
 
 ## Purpose
-TBD - created by archiving change remove-hipchat-and-chatbot. Update Purpose after archive.
+Define how notification senders register and receive events, and that Keel has no interactive ChatOps integrations.
 ## Requirements
 ### Requirement: Notification Sender Registry
 

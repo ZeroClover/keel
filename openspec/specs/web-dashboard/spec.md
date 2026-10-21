@@ -1,7 +1,7 @@
 # web-dashboard Specification
 
 ## Purpose
-TBD - created by archiving change remove-approvals-system. Update Purpose after archive.
+Define the routes, views and store modules of the bundled web dashboard.
 ## Requirements
 ### Requirement: Dashboard Route Set
 

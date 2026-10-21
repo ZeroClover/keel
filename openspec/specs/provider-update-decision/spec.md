@@ -1,7 +1,7 @@
 # provider-update-decision Specification
 
 ## Purpose
-TBD - created by archiving change refactor-watcher-and-force-policy. Update Purpose after archive.
+Define how providers decide whether an event's tag may update a resource: poll events are trusted as already policy-selected, external events must pass the resource's policy and filter.
 ## Requirements
 ### Requirement: External Events Must Satisfy Resource Policy
 
@@ -89,7 +89,7 @@ The helper used for non-poll events SHALL enforce these rules:
 - Non-Force policies SHALL evaluate the configured Filter against `[currentTag, eventTag]`; if the event tag is filtered out, reject it. If the current tag is filtered out but the event tag remains, the helper MUST continue with the remaining candidate set.
 - Non-Force policies SHALL call `Policy.Latest(candidates)` and allow the update only when the selected original tag equals the event tag.
 
-The Force-policy asymmetry is intentional: poll events sort registry tags by image created-time before selecting, while webhook/pubsub events are explicit external candidates and only need filter admission.
+The Force-policy asymmetry is intentional: poll events are selected by the watcher from the registry tag list (sorted by image created-time only for `force:created`), while webhook/pubsub events are explicit external candidates and only need filter admission.
 
 #### Scenario: Latest-based admission blocks downgrade
 

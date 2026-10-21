@@ -1,7 +1,7 @@
 # registry-client Specification
 
 ## Purpose
-TBD - created by archiving change refactor-watcher-and-force-policy. Update Purpose after archive.
+Define the registry client Keel uses to list tags, resolve manifest digests and read image created time.
 ## Requirements
 ### Requirement: Client Interface
 
